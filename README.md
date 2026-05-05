@@ -84,72 +84,185 @@ pi
 /login
 ```
 
-## Install Pi skills
+## Install the currently used skills
 
-This repo tracks portable global Pi skills in:
+This yadm repo restores Pi's settings, including the skill search paths, but some skills live outside `.pi/agent` and must be restored separately on a new machine.
 
-```text
-~/.pi/agent/skills/
+Current skill paths from `.pi/agent/settings.json`:
+
+```json
+{
+  "skills": [
+    "~/.codex/skills",
+    "~/.pi/skills",
+    "-C:/Users/wbert/.agents/skills/playwright-cli"
+  ]
+}
 ```
 
-After `yadm clone`, those skills are already restored in the right location. Restart Pi or run this inside Pi:
+Pi also discovers `~/.agents/skills/` by default. The explicit exclusion avoids loading the duplicate `~/.agents/skills/playwright-cli` because `~/.codex/skills/playwright-cli` is used instead.
+
+### 1. OpenSpec skills
+
+Currently installed in `~/.pi/skills/`:
+
+```text
+openspec-apply-change
+openspec-archive-change
+openspec-bulk-archive-change
+openspec-continue-change
+openspec-explore
+openspec-ff-change
+openspec-new-change
+openspec-onboard
+openspec-sync-specs
+openspec-verify-change
+```
+
+Restore this directory from your OpenSpec setup or copy it from an existing machine:
+
+```bash
+mkdir -p ~/.pi
+# copy or sync the existing ~/.pi/skills directory into ~/.pi/skills
+```
+
+Then verify:
+
+```bash
+find ~/.pi/skills -name SKILL.md | sort
+```
+
+### 2. Codex skills used by Pi
+
+Currently loaded from `~/.codex/skills/`:
+
+```text
+skill-creator
+skill-installer
+slides
+spreadsheets
+openscad
+playwright-cli
+```
+
+These come from the Codex skills installation. On a new machine, install or restore Codex skills first, then verify:
+
+```bash
+find ~/.codex/skills -name SKILL.md | sort
+```
+
+Pi sees this directory because `.pi/agent/settings.json` includes:
+
+```json
+"~/.codex/skills"
+```
+
+### 3. Agents skills
+
+Currently loaded from `~/.agents/skills/`:
+
+```text
+code-reviewer
+docs-writer
+godot-cli
+openscad-cli
+pr-creator
+```
+
+There is also a local `playwright-cli` there, but it is intentionally excluded in Pi settings to avoid duplicating the Codex `playwright-cli` skill.
+
+Restore these directories from your agents skills setup or copy them from an existing machine:
+
+```bash
+mkdir -p ~/.agents/skills
+# copy or sync the required skill directories into ~/.agents/skills
+```
+
+Then verify:
+
+```bash
+find ~/.agents/skills -maxdepth 2 -name SKILL.md | sort
+```
+
+### 4. Superpowers skills
+
+Superpowers is currently installed as a Git repo at:
+
+```text
+~/.codex/superpowers
+```
+
+and exposed to Pi through this symlink:
+
+```text
+~/.agents/skills/superpowers -> ~/.codex/superpowers
+```
+
+Restore it with:
+
+```bash
+git clone https://github.com/obra/superpowers.git ~/.codex/superpowers
+mkdir -p ~/.agents/skills
+ln -s ~/.codex/superpowers ~/.agents/skills/superpowers
+```
+
+On Windows Git Bash, if symlink creation is not enabled, copy the directory instead:
+
+```bash
+mkdir -p ~/.agents/skills
+cp -R ~/.codex/superpowers ~/.agents/skills/superpowers
+```
+
+Currently used Superpowers skills include:
+
+```text
+brainstorming
+dispatching-parallel-agents
+executing-plans
+finishing-a-development-branch
+receiving-code-review
+requesting-code-review
+subagent-driven-development
+systematic-debugging
+test-driven-development
+using-git-worktrees
+using-superpowers
+verification-before-completion
+writing-plans
+writing-skills
+```
+
+### 5. Pi package skills
+
+This setup also installs Pi packages through `.pi/agent/settings.json`:
+
+```json
+{
+  "packages": [
+    "npm:pi-updater",
+    "npm:pi-subagents",
+    "npm:pi-interactive-shell"
+  ]
+}
+```
+
+On a new machine, after `yadm clone`, start Pi or run:
+
+```bash
+pi update --extensions
+```
+
+Pi should install/update those packages and expose their bundled skills, such as `pi-subagents` and `pi-interactive-shell`.
+
+### 6. Verify skills in Pi
+
+After restoring the directories above, start Pi and reload resources:
 
 ```text
 /reload
 ```
 
-To add a new local skill, create a directory with a `SKILL.md` file:
-
-```text
-~/.pi/agent/skills/my-skill/SKILL.md
-```
-
-Minimal `SKILL.md`:
-
-```markdown
----
-name: my-skill
-description: Use this skill when ...
----
-
-# My Skill
-
-Instructions for the agent.
-```
-
-Then track it with yadm:
-
-```bash
-yadm add .pi/agent/skills/my-skill
-yadm commit -m "Add my-skill"
-yadm push
-```
-
-If a skill has dependencies, install them from the skill directory and do not commit generated dependencies like `node_modules/`:
-
-```bash
-cd ~/.pi/agent/skills/my-skill
-npm install
-```
-
-Pi also loads skills from other locations, but they are only portable if you track or reinstall them separately:
-
-```text
-~/.agents/skills/
-.pi/skills/
-.agents/skills/
-```
-
-For skills distributed as Pi packages, install the package and commit the resulting settings change:
-
-```bash
-pi install npm:<package-name>
-yadm add .pi/agent/settings.json
-yadm commit -m "Add pi skill package"
-yadm push
-```
-
-Use a skill inside Pi with:
+The startup header should list the expected skills. You can invoke one explicitly with:
 
 ```text
 /skill:<skill-name>
