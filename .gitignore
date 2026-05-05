@@ -1,0 +1,15 @@
+# Pi credentials / private state
+.pi/agent/auth.json
+.pi/agent/sessions/
+.pi/agent/run-history.jsonl
+.pi/agent/update-cache.json
+
+# Generated dependencies and caches
+**/node_modules/
+**/.cache/
+**/dist/
+**/build/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

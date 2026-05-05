@@ -1,0 +1,38 @@
+{
+  "lastChangelogVersion": "0.73.0",
+  "provider": "zai-coding",
+  "model": "glm-5.1",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "high",
+  "theme": "dark",
+  "enabledModels": [
+    "openai-codex/gpt-5.4",
+    "zai-coding/glm-5.1",
+    "zai-coding/glm-5-turbo",
+    "stratus/stratus-x1ac-xl-z-ai/glm-5.1",
+    "stratus/stratus-x1ac-xl-z-ai/glm-5v-turbo",
+    "stratus/stratus-x1ac-xl-minimax/minimax-m2.7",
+    "stratus/stratus-x1ac-xl-minimax/minimax-m2.5:free",
+    "openai-codex/gpt-5.5"
+  ],
+  "packages": [
+    "npm:pi-updater",
+    "npm:pi-subagents",
+    "npm:pi-interactive-shell"
+  ],
+  "skills": [
+    "~/.codex/skills",
+    "~/.pi/skills",
+    "-C:/Users/wbert/.agents/skills/playwright-cli"
+  ],
+  "prompts": [
+    "~/.pi/prompts"
+  ],
+  "extensions": [
+    "C:/Users/wbert/.pi/agent/extensions",
+    "C:/Users/wbert/bin/pi-profile-router/extension",
+    "/mnt/c/Users/wbert/.pi/agent/extensions",
+    "/mnt/c/Users/wbert/bin/pi-profile-router/extension"
+  ]
+}

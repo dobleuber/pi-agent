@@ -1,0 +1,79 @@
+{
+  "providers": {
+    "zai-coding": {
+      "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+      "api": "openai-completions",
+      "apiKey": "ZAI_API_KEY",
+      "models": [
+        {
+          "id": "glm-5.1",
+          "name": "GLM-5.1",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 200000,
+          "maxTokens": 16384
+        },
+        {
+          "id": "glm-5-turbo",
+          "name": "GLM-5-turbo",
+          "reasoning": false,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 128000,
+          "maxTokens": 4096
+        }
+      ]
+    },
+    "stratus": {
+      "baseUrl": "https://api.stratus.run/v1",
+      "api": "openai-completions",
+      "apiKey": "STRATUS_API_KEY",
+      "models": [
+        {
+          "id": "stratus-x1ac-xl-z-ai/glm-5.1",
+          "name": "Stratus GLM-5.1",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 200000,
+          "maxTokens": 131072
+        },
+        {
+          "id": "stratus-x1ac-xl-z-ai/glm-5v-turbo",
+          "name": "Stratus GLM-5V Turbo",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ],
+          "contextWindow": 200000,
+          "maxTokens": 131072
+        },
+        {
+          "id": "stratus-x1ac-xl-minimax/minimax-m2.7",
+          "name": "Stratus MiniMax M2.7",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 204800,
+          "maxTokens": 131072
+        },
+        {
+          "id": "stratus-x1ac-xl-minimax/minimax-m2.5:free",
+          "name": "Stratus MiniMax M2.5 Free",
+          "reasoning": true,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 196608,
+          "maxTokens": 8192
+        }
+      ]
+    }
+  }
+}
