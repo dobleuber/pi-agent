@@ -21,11 +21,6 @@
     "npm:pi-subagents",
     "npm:pi-interactive-shell"
   ],
-  "skills": [
-    "~/.codex/skills",
-    "~/.pi/skills",
-    "-C:/Users/wbert/.agents/skills/playwright-cli"
-  ],
   "prompts": [
     "~/.pi/prompts"
   ],

@@ -13,3 +13,11 @@
 # OS/editor noise
 .DS_Store
 Thumbs.db
+# Generated Python caches
+**/__pycache__/
+**/*.pyc
+# Skills generated elsewhere; Pi setup keeps active skills in ~/.agents/skills
+.pi/skills/
+.codex/skills/
+# Installed from upstream, not vendored in this dotfiles repo
+.agents/skills/superpowers/

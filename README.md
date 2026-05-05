@@ -7,17 +7,10 @@ This repository is managed with [yadm](https://yadm.io/) and tracks my portable 
 - `.pi/agent/settings.json`
 - `.pi/agent/models.json`
 - `.pi/agent/extensions/`
-- Local/custom skills used by Pi:
-  - `.codex/skills/code-reviewer/`
-  - `.codex/skills/docs-writer/`
-  - `.codex/skills/openscad/`
-  - `.codex/skills/playwright-cli/`
-  - `.codex/skills/pr-creator/`
-  - `.agents/skills/code-reviewer/`
-  - `.agents/skills/docs-writer/`
-  - `.agents/skills/godot-cli/`
-  - `.agents/skills/openscad-cli/`
-  - `.agents/skills/pr-creator/`
+- `.agents/skills/` for all portable skills used by Pi, including:
+  - OpenSpec skills: `.agents/skills/openspec-*`
+  - Codex/system skills copied for Pi: `skill-creator`, `skill-installer`, `slides`, `spreadsheets`
+  - Local workflow/tool skills: `code-reviewer`, `docs-writer`, `openscad`, `playwright-cli`, `pr-creator`, `godot-cli`, `openscad-cli`
 - Optional Pi resources if added later: `keybindings.json`, `AGENTS.md`, `SYSTEM.md`, `APPEND_SYSTEM.md`, `prompts/`, `themes/`
 
 ## What is intentionally not tracked
@@ -96,25 +89,69 @@ pi
 
 ## Install the currently used skills
 
-Pi loads skills from these paths in this setup:
+For Pi, this setup keeps portable skills in one place:
 
-```json
-{
-  "skills": [
-    "~/.codex/skills",
-    "~/.pi/skills",
-    "-C:/Users/wbert/.agents/skills/playwright-cli"
-  ]
-}
+```text
+~/.agents/skills/
 ```
 
-Pi also discovers `~/.agents/skills/` by default. The explicit exclusion prevents loading the duplicate `~/.agents/skills/playwright-cli`; this setup uses the `~/.codex/skills/playwright-cli` copy.
+`.pi/agent/settings.json` no longer adds `~/.codex/skills` or `~/.pi/skills`, so Pi does not load duplicate skills from those directories. Pi discovers `~/.agents/skills/` by default.
 
-### 1. OpenSpec
+### 1. Restore tracked skills with yadm
+
+Most of the active Pi skills are tracked directly in this repo under `.agents/skills/`.
+
+Install/restore them with:
+
+```bash
+yadm clone git@github.com:dobleuber/pi-agent.git
+```
+
+If the repo already exists on the machine:
+
+```bash
+yadm pull
+```
+
+Tracked skill groups:
+
+```text
+~/.agents/skills/code-reviewer
+~/.agents/skills/docs-writer
+~/.agents/skills/godot-cli
+~/.agents/skills/openscad
+~/.agents/skills/openscad-cli
+~/.agents/skills/openspec-*
+~/.agents/skills/playwright-cli
+~/.agents/skills/pr-creator
+~/.agents/skills/skill-creator
+~/.agents/skills/skill-installer
+~/.agents/skills/slides
+~/.agents/skills/spreadsheets
+```
+
+Tool prerequisites used by some of those skills:
+
+```powershell
+# OpenSCAD skills
+winget install OpenSCAD.OpenSCAD
+
+# Godot skill: install Godot 4.x and update the executable path inside
+# ~/.agents/skills/godot-cli/SKILL.md if it differs on the new machine.
+```
+
+For `playwright-cli`, install the CLI if it is not already available:
+
+```bash
+npm install -g playwright-cli
+# or use npx playwright-cli when needed
+```
+
+### 2. OpenSpec
 
 Source: <https://openspec.dev/> / <https://github.com/Fission-AI/OpenSpec>
 
-Currently installed CLI version on this machine:
+Current CLI version used when these skills were generated:
 
 ```bash
 openspec --version
@@ -129,7 +166,7 @@ npm install -g @fission-ai/openspec@latest
 # npm install -g @fission-ai/openspec@1.2.0
 ```
 
-This setup uses OpenSpec's **custom expanded workflow** with Pi tool output. Configure OpenSpec like this:
+This setup uses OpenSpec's **custom expanded workflow** with Pi output. Configure OpenSpec:
 
 ```bash
 openspec config profile
@@ -153,28 +190,41 @@ workflows:
   onboard
 ```
 
-Then generate the Pi skills and prompts from your home directory:
+OpenSpec's Pi integration generates skills into `~/.pi/skills`. Since this repo keeps Pi skills consolidated in `~/.agents/skills`, move them after generation:
 
 ```bash
 cd ~
 openspec init --tools pi --profile custom --force
+mkdir -p ~/.agents/skills
+cp -R ~/.pi/skills/openspec-* ~/.agents/skills/
+rm -rf ~/.pi/skills
+
 # Later, after upgrading OpenSpec:
 openspec update --force
+cp -R ~/.pi/skills/openspec-* ~/.agents/skills/
+rm -rf ~/.pi/skills
 ```
 
-Expected generated files:
+Prompts remain in `~/.pi/prompts/`, because `.pi/agent/settings.json` loads that prompt directory.
+
+Expected OpenSpec skills after consolidation:
 
 ```text
-~/.pi/skills/openspec-apply-change/SKILL.md
-~/.pi/skills/openspec-archive-change/SKILL.md
-~/.pi/skills/openspec-bulk-archive-change/SKILL.md
-~/.pi/skills/openspec-continue-change/SKILL.md
-~/.pi/skills/openspec-explore/SKILL.md
-~/.pi/skills/openspec-ff-change/SKILL.md
-~/.pi/skills/openspec-new-change/SKILL.md
-~/.pi/skills/openspec-onboard/SKILL.md
-~/.pi/skills/openspec-sync-specs/SKILL.md
-~/.pi/skills/openspec-verify-change/SKILL.md
+~/.agents/skills/openspec-apply-change/SKILL.md
+~/.agents/skills/openspec-archive-change/SKILL.md
+~/.agents/skills/openspec-bulk-archive-change/SKILL.md
+~/.agents/skills/openspec-continue-change/SKILL.md
+~/.agents/skills/openspec-explore/SKILL.md
+~/.agents/skills/openspec-ff-change/SKILL.md
+~/.agents/skills/openspec-new-change/SKILL.md
+~/.agents/skills/openspec-onboard/SKILL.md
+~/.agents/skills/openspec-sync-specs/SKILL.md
+~/.agents/skills/openspec-verify-change/SKILL.md
+```
+
+Expected OpenSpec prompts:
+
+```text
 ~/.pi/prompts/opsx-apply.md
 ~/.pi/prompts/opsx-archive.md
 ~/.pi/prompts/opsx-bulk-archive.md
@@ -191,33 +241,27 @@ Verify:
 
 ```bash
 openspec config list
-find ~/.pi/skills -name SKILL.md | sort
+find ~/.agents/skills -maxdepth 2 -name 'SKILL.md' | sort
 find ~/.pi/prompts -name 'opsx-*.md' | sort
 ```
 
-### 2. Superpowers
+### 3. Superpowers
 
 Source: <https://github.com/obra/superpowers>
 
-This setup exposes Superpowers to Pi by installing the repo at `~/.codex/superpowers` and linking it into Pi's default skill discovery path at `~/.agents/skills/superpowers`.
-
-Install:
+Install Superpowers directly under `.agents/skills`:
 
 ```bash
-git clone https://github.com/obra/superpowers.git ~/.codex/superpowers
-mkdir -p ~/.agents/skills
-ln -s ~/.codex/superpowers ~/.agents/skills/superpowers
+git clone https://github.com/obra/superpowers.git ~/.agents/skills/superpowers
 ```
 
-On Windows Git Bash, if symlink creation is not enabled, copy the directory instead:
+Do not vendor the Superpowers repo in yadm; `.gitignore` excludes `.agents/skills/superpowers/`. Reinstall/update it from upstream instead:
 
 ```bash
-git clone https://github.com/obra/superpowers.git ~/.codex/superpowers
-mkdir -p ~/.agents/skills
-cp -R ~/.codex/superpowers ~/.agents/skills/superpowers
+git -C ~/.agents/skills/superpowers pull
 ```
 
-Expected skills:
+Expected Superpowers skills:
 
 ```text
 brainstorming
@@ -239,88 +283,10 @@ writing-skills
 Verify:
 
 ```bash
-find -L ~/.agents/skills/superpowers/skills -name SKILL.md | sort
+find ~/.agents/skills/superpowers/skills -name SKILL.md | sort
 ```
 
-### 3. Local/custom skills tracked by this yadm repo
-
-These skills are part of this machine's setup and are now tracked directly by yadm in their real locations, not copied into a separate folder.
-
-Loaded from `~/.codex/skills/`:
-
-```text
-code-reviewer
-docs-writer
-openscad
-playwright-cli
-pr-creator
-```
-
-Loaded from `~/.agents/skills/`:
-
-```text
-code-reviewer
-docs-writer
-godot-cli
-openscad-cli
-pr-creator
-```
-
-Install/restore them with this repo:
-
-```bash
-yadm clone git@github.com:dobleuber/pi-agent.git
-```
-
-If the repo is already cloned on the machine:
-
-```bash
-yadm pull
-```
-
-Tool prerequisites used by those skills:
-
-```powershell
-# OpenSCAD skill
-winget install OpenSCAD.OpenSCAD
-
-# Godot skill: install Godot 4.x and update the executable path inside
-# ~/.agents/skills/godot-cli/SKILL.md if it differs on the new machine.
-```
-
-For `playwright-cli`, install the CLI if it is not already available:
-
-```bash
-npm install -g playwright-cli
-# or use npx playwright-cli when needed
-```
-
-Verify:
-
-```bash
-find ~/.codex/skills -maxdepth 3 -name SKILL.md | sort
-find ~/.agents/skills -maxdepth 3 -name SKILL.md | sort
-```
-
-### 4. Codex built-in/runtime skills
-
-These are installed by Codex itself, not by this repo:
-
-```text
-skill-creator
-skill-installer
-slides
-spreadsheets
-```
-
-After installing Codex on a new machine, verify:
-
-```bash
-find ~/.codex/skills/.system -name SKILL.md | sort
-find ~/.codex/skills/codex-primary-runtime -name SKILL.md | sort
-```
-
-### 5. Pi package skills
+### 4. Pi package skills
 
 These Pi packages are configured in `.pi/agent/settings.json`:
 
@@ -353,7 +319,7 @@ Verify:
 pi list
 ```
 
-### 6. Verify skills in Pi
+### 5. Verify skills in Pi
 
 Start Pi and reload resources:
 
@@ -361,7 +327,7 @@ Start Pi and reload resources:
 /reload
 ```
 
-The startup header should list the expected skills. You can invoke one explicitly with:
+The startup header should list skills from `~/.agents/skills`. You can invoke one explicitly with:
 
 ```text
 /skill:<skill-name>
@@ -378,7 +344,7 @@ yadm status
 Commit configuration changes:
 
 ```bash
-yadm add .pi/agent/settings.json .pi/agent/models.json .pi/agent/extensions \n  .codex/skills/code-reviewer .codex/skills/docs-writer .codex/skills/openscad \n  .codex/skills/playwright-cli .codex/skills/pr-creator \n  .agents/skills/code-reviewer .agents/skills/docs-writer .agents/skills/godot-cli \n  .agents/skills/openscad-cli .agents/skills/pr-creator
+yadm add .pi/agent/settings.json .pi/agent/models.json .pi/agent/extensions .agents/skills
 yadm commit -m "Update pi agent config"
 yadm push
 ```
