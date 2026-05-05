@@ -84,6 +84,77 @@ pi
 /login
 ```
 
+## Install Pi skills
+
+This repo tracks portable global Pi skills in:
+
+```text
+~/.pi/agent/skills/
+```
+
+After `yadm clone`, those skills are already restored in the right location. Restart Pi or run this inside Pi:
+
+```text
+/reload
+```
+
+To add a new local skill, create a directory with a `SKILL.md` file:
+
+```text
+~/.pi/agent/skills/my-skill/SKILL.md
+```
+
+Minimal `SKILL.md`:
+
+```markdown
+---
+name: my-skill
+description: Use this skill when ...
+---
+
+# My Skill
+
+Instructions for the agent.
+```
+
+Then track it with yadm:
+
+```bash
+yadm add .pi/agent/skills/my-skill
+yadm commit -m "Add my-skill"
+yadm push
+```
+
+If a skill has dependencies, install them from the skill directory and do not commit generated dependencies like `node_modules/`:
+
+```bash
+cd ~/.pi/agent/skills/my-skill
+npm install
+```
+
+Pi also loads skills from other locations, but they are only portable if you track or reinstall them separately:
+
+```text
+~/.agents/skills/
+.pi/skills/
+.agents/skills/
+```
+
+For skills distributed as Pi packages, install the package and commit the resulting settings change:
+
+```bash
+pi install npm:<package-name>
+yadm add .pi/agent/settings.json
+yadm commit -m "Add pi skill package"
+yadm push
+```
+
+Use a skill inside Pi with:
+
+```text
+/skill:<skill-name>
+```
+
 ## Daily use
 
 Check changes:
