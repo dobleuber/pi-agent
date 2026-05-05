@@ -18,6 +18,57 @@ This repository is managed with [yadm](https://yadm.io/) and tracks my portable 
 - `.pi/agent/update-cache.json`
 - `node_modules/` and other generated caches
 
+## Install yadm
+
+### Windows
+
+Use Git Bash or another Bash-compatible shell. Install yadm into `~/.local/bin`:
+
+```bash
+mkdir -p ~/.local/bin
+curl -L --fail -o ~/.local/bin/yadm https://github.com/yadm-dev/yadm/raw/master/yadm
+chmod +x ~/.local/bin/yadm
+yadm --version
+```
+
+Make sure `~/.local/bin` is on your `PATH`.
+
+If you use WSL, install yadm from your Linux distribution instead, for example:
+
+```bash
+sudo apt update
+sudo apt install yadm
+```
+
+### Linux
+
+Debian/Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install yadm
+```
+
+Fedora:
+
+```bash
+sudo dnf install yadm
+```
+
+Arch Linux:
+
+```bash
+sudo pacman -S yadm
+```
+
+### macOS
+
+Using Homebrew:
+
+```bash
+brew install yadm
+```
+
 ## Restore on a new machine
 
 Install yadm, then clone this repo into your home directory:
