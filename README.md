@@ -89,13 +89,15 @@ pi
 
 ## Install the currently used skills
 
-For Pi, this setup keeps portable skills in one place:
+For Pi, this setup keeps the portable tracked copies in one place:
 
 ```text
 ~/.agents/skills/
 ```
 
-`.pi/agent/settings.json` no longer adds `~/.codex/skills` or `~/.pi/skills`, so Pi does not load duplicate skills from those directories. Pi discovers `~/.agents/skills/` by default.
+Pi can still load additional, non-duplicated skills from `~/.codex/skills` and `~/.pi/skills`.
+
+`.pi/agent/settings.json` still includes `~/.codex/skills` and `~/.pi/skills` so future skills installed there are loaded. Known skills that were consolidated into `~/.agents/skills` are explicitly excluded from those paths to avoid duplicate names.
 
 ### 1. Restore tracked skills with yadm
 
@@ -205,7 +207,7 @@ cp -R ~/.pi/skills/openspec-* ~/.agents/skills/
 rm -rf ~/.pi/skills
 ```
 
-Prompts remain in `~/.pi/prompts/`, because `.pi/agent/settings.json` loads that prompt directory.
+Prompts remain in `~/.pi/prompts/`, because `.pi/agent/settings.json` loads that prompt directory. The generated `~/.pi/skills/openspec-*` copies are excluded from Pi loading after they are copied into `~/.agents/skills`, avoiding duplicate OpenSpec skill names.
 
 Expected OpenSpec skills after consolidation:
 

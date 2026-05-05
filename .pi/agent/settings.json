@@ -29,5 +29,28 @@
     "C:/Users/wbert/bin/pi-profile-router/extension",
     "/mnt/c/Users/wbert/.pi/agent/extensions",
     "/mnt/c/Users/wbert/bin/pi-profile-router/extension"
+  ],
+  "skills": [
+    "~/.codex/skills",
+    "~/.pi/skills",
+    "-~/.codex/skills/code-reviewer",
+    "-~/.codex/skills/docs-writer",
+    "-~/.codex/skills/openscad",
+    "-~/.codex/skills/playwright-cli",
+    "-~/.codex/skills/pr-creator",
+    "-~/.codex/skills/.system/skill-creator",
+    "-~/.codex/skills/.system/skill-installer",
+    "-~/.codex/skills/codex-primary-runtime/slides",
+    "-~/.codex/skills/codex-primary-runtime/spreadsheets",
+    "-~/.pi/skills/openspec-apply-change",
+    "-~/.pi/skills/openspec-archive-change",
+    "-~/.pi/skills/openspec-bulk-archive-change",
+    "-~/.pi/skills/openspec-continue-change",
+    "-~/.pi/skills/openspec-explore",
+    "-~/.pi/skills/openspec-ff-change",
+    "-~/.pi/skills/openspec-new-change",
+    "-~/.pi/skills/openspec-onboard",
+    "-~/.pi/skills/openspec-sync-specs",
+    "-~/.pi/skills/openspec-verify-change"
   ]
 }
