@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.73.0",
+  "lastChangelogVersion": "0.74.0",
   "provider": "zai-coding",
   "model": "glm-5.1",
   "defaultProvider": "openai-codex",
@@ -35,22 +35,8 @@
     "~/.pi/skills",
     "-~/.codex/skills/code-reviewer",
     "-~/.codex/skills/docs-writer",
-    "-~/.codex/skills/openscad",
-    "-~/.codex/skills/playwright-cli",
     "-~/.codex/skills/pr-creator",
     "-~/.codex/skills/.system/skill-creator",
-    "-~/.codex/skills/.system/skill-installer",
-    "-~/.codex/skills/codex-primary-runtime/slides",
-    "-~/.codex/skills/codex-primary-runtime/spreadsheets",
-    "-~/.pi/skills/openspec-apply-change",
-    "-~/.pi/skills/openspec-archive-change",
-    "-~/.pi/skills/openspec-bulk-archive-change",
-    "-~/.pi/skills/openspec-continue-change",
-    "-~/.pi/skills/openspec-explore",
-    "-~/.pi/skills/openspec-ff-change",
-    "-~/.pi/skills/openspec-new-change",
-    "-~/.pi/skills/openspec-onboard",
-    "-~/.pi/skills/openspec-sync-specs",
-    "-~/.pi/skills/openspec-verify-change"
+    "-~/.codex/skills/.system/skill-installer"
   ]
 }
