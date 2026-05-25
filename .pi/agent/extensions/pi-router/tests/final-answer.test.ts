@@ -56,6 +56,24 @@ describe("final answer translation", () => {
 		assert.equal(result.spanishAnswer, "Listo.");
 	});
 
+	it("masks paths before final-answer translation and restores them afterward", async () => {
+		let body: any;
+		const path = "openspec/changes/add-roger-concurrent-interruption-listening/";
+		const fetchLike = async (_url: string, init: any) => {
+			body = JSON.parse(init.body);
+			return {
+				ok: true,
+				json: async () => ({ choices: [{ message: { content: "<SPANISH>Sin tocar __PI_ROUTER_PROTECTED_0__.</SPANISH>" } }] }),
+			};
+		};
+
+		const result = await translateFinalAnswerToSpanish(`Do not change ${path}.`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.doesNotMatch(body.messages[0].content, /add-roger-concurrent-interruption-listening/);
+		assert.match(body.messages[0].content, /__PI_ROUTER_PROTECTED_0__/);
+		assert.equal(result.spanishAnswer, `Sin tocar ${path}.`);
+	});
+
 	it("falls back visibly when translation fails or times out", async () => {
 		const result = await translateFinalAnswerToSpanish(
 			"Done.",

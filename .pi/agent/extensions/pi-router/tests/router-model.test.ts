@@ -78,6 +78,26 @@ describe("local router model", () => {
 		assert.deepEqual(result.unresolvedReferences, []);
 	});
 
+	it("masks paths before routing and restores them in the translated prompt", async () => {
+		let body: any;
+		const path = "openspec/changes/mejorar-naturalidad-salida-hablada-roger/";
+		const fetchLike = async (_url: string, init: any) => {
+			body = JSON.parse(init.body);
+			return {
+				ok: true,
+				json: async () => ({
+					choices: [{ message: { content: '{"translation":"Review __PI_ROUTER_PROTECTED_0__ without changing it.","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
+				}),
+			};
+		};
+
+		const result = await routePromptWithModel(`Revisa ${path} sin cambiarlo`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.doesNotMatch(body.messages[0].content, /mejorar-naturalidad-salida-hablada-roger/);
+		assert.match(body.messages[0].content, /__PI_ROUTER_PROTECTED_0__/);
+		assert.equal(result.englishPrompt, `Review ${path} without changing it.`);
+	});
+
 	it("records unresolved references without inventing intent", async () => {
 		const fetchLike = async () => ({
 			ok: true,

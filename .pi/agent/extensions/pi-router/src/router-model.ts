@@ -1,4 +1,5 @@
 import type { RouterModelConfig } from "./config.ts";
+import { maskProtectedSpans } from "./protected-text.ts";
 
 export type ThinkingLevel = "low" | "medium" | "high";
 
@@ -84,6 +85,7 @@ export async function routePromptWithModel(
 		return passthrough(prompt, `input exceeds router maxInputChars: ${prompt.length} > ${config.maxInputChars}`);
 	}
 
+	const protectedPrompt = maskProtectedSpans(prompt);
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 	try {
@@ -93,7 +95,7 @@ export async function routePromptWithModel(
 			signal: controller.signal,
 			body: JSON.stringify({
 				model: config.model,
-				messages: buildRouterMessages(prompt, context),
+				messages: buildRouterMessages(protectedPrompt.text, context),
 				temperature: 0,
 				max_tokens: 512,
 			}),
@@ -106,7 +108,7 @@ export async function routePromptWithModel(
 		if (typeof content !== "string" || content.trim().length === 0) {
 			return passthrough(prompt, "router model returned no content");
 		}
-		return normalizeRouterPayload(parseFirstJsonObject(content), prompt);
+		return normalizeRouterPayload(parseFirstJsonObject(content), prompt, protectedPrompt.restore);
 	} catch (error) {
 		return passthrough(prompt, `router model unavailable: ${errorMessage(error)}`);
 	} finally {
@@ -123,7 +125,7 @@ function buildRouterMessages(prompt: string, context: RouterContextOptions): Arr
 	return [{ role: "user", content: parts.join("\n\n") }];
 }
 
-function normalizeRouterPayload(payload: any, originalPrompt: string): RouterModelResult {
+function normalizeRouterPayload(payload: any, originalPrompt: string, restoreProtectedSpans: (text: string) => string = (text) => text): RouterModelResult {
 	const thinkingLevel = parseThinkingLevel(payload?.thinkingLevel);
 	const translatedPrompt = typeof payload?.translation === "string" && payload.translation.trim()
 		? payload.translation.trim()
@@ -131,7 +133,7 @@ function normalizeRouterPayload(payload: any, originalPrompt: string): RouterMod
 			? payload.englishPrompt.trim()
 			: originalPrompt;
 	return {
-		englishPrompt: translatedPrompt,
+		englishPrompt: restoreProtectedSpans(translatedPrompt),
 		sourceLanguage: typeof payload?.sourceLanguage === "string" ? payload.sourceLanguage : "unknown",
 		thinkingLevel,
 		translateFinalAnswer: payload?.translateFinalAnswer !== false,

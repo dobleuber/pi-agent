@@ -1,4 +1,5 @@
 import type { RouterModelConfig } from "./config.ts";
+import { maskProtectedSpans } from "./protected-text.ts";
 
 export interface FinalAnswerTranslationResult {
 	englishAnswer: string;
@@ -32,6 +33,7 @@ export async function translateFinalAnswerToSpanish(
 	config: RouterModelConfig,
 	fetchLike: FetchLike = fetch as FetchLike,
 ): Promise<FinalAnswerTranslationResult> {
+	const protectedAnswer = maskProtectedSpans(englishAnswer);
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 	try {
@@ -42,7 +44,7 @@ export async function translateFinalAnswerToSpanish(
 			body: JSON.stringify({
 				model: config.model,
 				messages: [
-					{ role: "user", content: buildFinalAnswerPrompt(englishAnswer) },
+					{ role: "user", content: buildFinalAnswerPrompt(protectedAnswer.text) },
 				],
 				temperature: 0,
 				max_tokens: Math.max(256, Math.ceil(englishAnswer.length / 2)),
@@ -57,7 +59,7 @@ export async function translateFinalAnswerToSpanish(
 		if (typeof content !== "string" || !content.trim()) {
 			return fallback(englishAnswer, "final answer translation unavailable: empty response");
 		}
-		const spanishAnswer = cleanTranslatedAnswer(content);
+		const spanishAnswer = protectedAnswer.restore(cleanTranslatedAnswer(content));
 		if (!spanishAnswer) {
 			return fallback(englishAnswer, "final answer translation unavailable: empty response after cleanup");
 		}
