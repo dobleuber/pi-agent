@@ -98,6 +98,26 @@ describe("local router model", () => {
 		assert.equal(result.englishPrompt, `Review ${path} without changing it.`);
 	});
 
+	it("preserves Pi @ path references when masking paths before routing", async () => {
+		let body: any;
+		const pathReference = "@src/router-model.ts";
+		const fetchLike = async (_url: string, init: any) => {
+			body = JSON.parse(init.body);
+			return {
+				ok: true,
+				json: async () => ({
+					choices: [{ message: { content: '{"translation":"Review __PI_ROUTER_PROTECTED_0__","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
+				}),
+			};
+		};
+
+		const result = await routePromptWithModel(`Revisa ${pathReference}`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.doesNotMatch(body.messages[0].content, /src\/router-model\.ts/);
+		assert.match(body.messages[0].content, /__PI_ROUTER_PROTECTED_0__/);
+		assert.equal(result.englishPrompt, `Review ${pathReference}`);
+	});
+
 	it("records unresolved references without inventing intent", async () => {
 		const fetchLike = async () => ({
 			ok: true,

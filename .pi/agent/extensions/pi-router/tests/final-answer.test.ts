@@ -74,6 +74,38 @@ describe("final answer translation", () => {
 		assert.equal(result.spanishAnswer, `Sin tocar ${path}.`);
 	});
 
+	it("does not mask slash-separated prose as a path in final answers", async () => {
+		let body: any;
+		const fetchLike = async (_url: string, init: any) => {
+			body = JSON.parse(init.body);
+			return {
+				ok: true,
+				json: async () => ({ choices: [{ message: { content: "<SPANISH>Puede estar installed/copied/symlinked en __PI_ROUTER_PROTECTED_0__.</SPANISH>" } }] }),
+			};
+		};
+
+		const result = await translateFinalAnswerToSpanish(
+			"It can be installed/copied/symlinked in ~/.pi/agent/extensions/pi-router/.",
+			DEFAULT_ROUTER_CONFIG.routerModel,
+			fetchLike,
+		);
+
+		assert.match(body.messages[0].content, /installed\/copied\/symlinked/);
+		assert.equal(result.spanishAnswer, "Puede estar installed/copied/symlinked en ~/.pi/agent/extensions/pi-router/.");
+	});
+
+	it("restores observed misspelled protected placeholders from translated final answers", async () => {
+		const path = "@~/.pi/agent/extensions/pi-router/README.md";
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: "<SPANISH>El archivo @__PI_ROUTER_PROTECITED_0__ dice eso.</SPANISH>" } }] }),
+		});
+
+		const result = await translateFinalAnswerToSpanish(`The file ${path} says that.`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(result.spanishAnswer, `El archivo ${path} dice eso.`);
+	});
+
 	it("falls back visibly when translation fails or times out", async () => {
 		const result = await translateFinalAnswerToSpanish(
 			"Done.",
