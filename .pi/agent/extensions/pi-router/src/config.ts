@@ -13,7 +13,6 @@ export interface RouterModelConfig {
 export interface RouterConfig {
 	state: RouterState;
 	routerModel: RouterModelConfig;
-	detailsShortcut?: string;
 }
 
 export interface RouterStateOverrides {
@@ -47,7 +46,6 @@ export const DEFAULT_ROUTER_CONFIG: RouterConfig = {
 		fallbackMode: "passthrough-with-warning",
 		maxInputChars: 12000,
 	},
-	detailsShortcut: "ctrl+alt+r",
 };
 
 export function resolveRouterState(

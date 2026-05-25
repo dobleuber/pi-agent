@@ -47,30 +47,6 @@ describe("pi-router extension entrypoint", () => {
 		]);
 	});
 
-	it("registers a configurable router-details shortcut and command", async () => {
-		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
-		const shortcuts = new Map<string, { handler: (ctx: any) => Promise<void> }>();
-		const notifications: string[] = [];
-		const pi = {
-			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) {
-				commands.set(name, command);
-			},
-			on() {},
-			registerShortcut(shortcut: string, options: { handler: (ctx: any) => Promise<void> }) {
-				shortcuts.set(shortcut, options);
-			},
-		};
-		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
-
-		installPiRouter(pi as any, { config: { ...DEFAULT_TEST_CONFIG, detailsShortcut: "ctrl+alt+r" } as any });
-		await commands.get("router-details")!.handler("", ctx);
-		await shortcuts.get("ctrl+alt+r")!.handler(ctx);
-
-		assert.ok(commands.has("router-details"));
-		assert.ok(shortcuts.has("ctrl+alt+r"));
-		assert.deepEqual(notifications, ["No router details recorded yet", "No router details recorded yet"]);
-	});
-
 	it("translates final assistant messages and updates latest router details", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();

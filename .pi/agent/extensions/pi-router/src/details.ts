@@ -80,20 +80,6 @@ export function parseSinglePromptBypass(text: string): { bypass: boolean; prompt
 	return { bypass: true, prompt: trimmed.slice(prefix.length).trimStart() };
 }
 
-export function resolveDetailsShortcut(shortcut = "ctrl+alt+r"): { shortcut: string; conflict?: string } {
-	const normalized = shortcut.toLowerCase();
-	if (normalized === "ctrl+r") {
-		return { shortcut, conflict: "ctrl+r conflicts with Pi session rename unless remapped" };
-	}
-	if (normalized === "ctrl+t") {
-		return { shortcut, conflict: "ctrl+t conflicts with Pi thinking/tree toggles unless remapped" };
-	}
-	if (normalized === "ctrl+shift+r") {
-		return { shortcut, conflict: "ctrl+shift+r conflicts with the files extension restore shortcut" };
-	}
-	return { shortcut };
-}
-
 function formatWorkModel(workModel?: WorkModelInfo): string {
 	if (!workModel?.provider && !workModel?.model) return "unknown";
 	if (!workModel.provider) return workModel.model ?? "unknown";

@@ -4,7 +4,6 @@ import {
 	createRouterDetailsEntry,
 	extendRouterDetailsAfterCompletion,
 	parseSinglePromptBypass,
-	resolveDetailsShortcut,
 	toggleRouterDetails,
 } from "../src/details.ts";
 
@@ -61,25 +60,11 @@ describe("router details UX model", () => {
 		assert.deepEqual(completed.details.fallbackEvents, ["none"]);
 	});
 
-	it("parses bypass prefix and resolves configurable details shortcut", () => {
+	it("parses bypass prefix", () => {
 		assert.deepEqual(parseSinglePromptBypass("@router:off envia esto literal"), {
 			bypass: true,
 			prompt: "envia esto literal",
 		});
 		assert.deepEqual(parseSinglePromptBypass("hola"), { bypass: false, prompt: "hola" });
-
-		assert.deepEqual(resolveDetailsShortcut(), { shortcut: "ctrl+alt+r" });
-		assert.deepEqual(resolveDetailsShortcut("ctrl+r"), {
-			shortcut: "ctrl+r",
-			conflict: "ctrl+r conflicts with Pi session rename unless remapped",
-		});
-		assert.deepEqual(resolveDetailsShortcut("ctrl+t"), {
-			shortcut: "ctrl+t",
-			conflict: "ctrl+t conflicts with Pi thinking/tree toggles unless remapped",
-		});
-		assert.deepEqual(resolveDetailsShortcut("ctrl+shift+r"), {
-			shortcut: "ctrl+shift+r",
-			conflict: "ctrl+shift+r conflicts with the files extension restore shortcut",
-		});
 	});
 });

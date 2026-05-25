@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_ROUTER_CONFIG, routerStatusSummary, type RouterConfig } from "./config.ts";
-import { extendRouterDetailsAfterCompletion, resolveDetailsShortcut, toggleRouterDetails, type RouterDetailsEntry } from "./details.ts";
+import { extendRouterDetailsAfterCompletion, type RouterDetailsEntry } from "./details.ts";
 import { translateFinalAnswerToSpanish, type FinalAnswerTranslationResult } from "./final-answer.ts";
 import { shouldRouteInput } from "./input.ts";
 import { prepareRoutedPrompt, type PrepareRoutedPromptInput } from "./pipeline.ts";
@@ -39,25 +39,6 @@ function replaceTextContent(content: unknown, text: string): unknown {
 	return [{ type: "text", text }];
 }
 
-function renderRouterDetails(entry: RouterDetailsEntry): string {
-	if (!entry.expanded) {
-		return entry.summary;
-	}
-	const lines = [
-		entry.summary,
-		`original: ${entry.details.originalPrompt}`,
-		`translated: ${entry.details.transformedPrompt}`,
-		`routerModel: ${entry.details.routerModel}`,
-		`workModel: ${entry.details.workModel}`,
-		`thinking: ${entry.details.requestedThinkingLevel}`,
-	];
-	if (entry.details.effectiveThinkingLevel) lines.push(`effectiveThinking: ${entry.details.effectiveThinkingLevel}`);
-	if (entry.details.englishAnswer) lines.push(`englishAnswer: ${entry.details.englishAnswer}`);
-	if (entry.details.spanishAnswer) lines.push(`spanishAnswer: ${entry.details.spanishAnswer}`);
-	if (entry.details.fallbackEvents?.length) lines.push(`fallback: ${entry.details.fallbackEvents.join("; ")}`);
-	return lines.join("\n");
-}
-
 export default function piRouterExtension(pi: ExtensionAPI) {
 	installPiRouter(pi, {});
 }
@@ -72,15 +53,6 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		config = { ...config, state };
 		stateStore.saveState(state);
 		ctx.ui.setStatus("pi-router", `router:${config.state}`);
-	}
-
-	function showRouterDetails(ctx: any) {
-		if (!lastDetails) {
-			ctx.ui.notify("No router details recorded yet", "info");
-			return;
-		}
-		lastDetails = toggleRouterDetails(lastDetails);
-		ctx.ui.notify(renderRouterDetails(lastDetails), "info");
 	}
 
 	pi.registerCommand("router", {
@@ -100,19 +72,6 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			ctx.ui.notify(routerStatusSummary({ config }), "info");
 		},
 	});
-
-	pi.registerCommand("router-details", {
-		description: "Expand or collapse Pi router details for the latest routed prompt",
-		handler: async (_args, ctx) => showRouterDetails(ctx),
-	});
-
-	const shortcut = resolveDetailsShortcut(config.detailsShortcut).shortcut;
-	if (typeof (pi as any).registerShortcut === "function") {
-		(pi as any).registerShortcut(shortcut, {
-			description: "Expand or collapse Pi router details",
-			handler: async (ctx: any) => showRouterDetails(ctx),
-		});
-	}
 
 	pi.on("session_start", async (_event, ctx) => {
 		ctx.ui.setStatus("pi-router", `router:${config.state}`);
