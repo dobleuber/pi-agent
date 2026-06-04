@@ -12,6 +12,7 @@ This repository is managed with [yadm](https://yadm.io/) and tracks my portable 
   - `code-reviewer`, `docs-writer`, `pr-creator`
   - `godot-cli`, `openscad-cli`
   - `skill-creator`, `skill-installer`
+- Documentation for Context Mode's Pi workflow. Context Mode's npm package is configured for Pi; generated local databases and caches are not tracked.
 - Optional Pi resources if added later: `keybindings.json`, `AGENTS.md`, `SYSTEM.md`, `APPEND_SYSTEM.md`, `prompts/`, `themes/`
 
 ## What is intentionally not tracked
@@ -147,7 +148,54 @@ npm install -g playwright-cli
 # or use npx playwright-cli when needed
 ```
 
-### 2. OpenSpec
+### 2. Context Mode context-hygiene workflow
+
+Source: <https://github.com/mksglu/context-mode>
+
+Context Mode is configured as a Pi package to add context-hygiene tools and session-continuity hooks. It complements CodeGraph rather than replacing it: CodeGraph remains the first choice for code architecture, symbol lookup, callers/callees, and impact analysis; Context Mode is for large outputs, logs, fetched content, bulk data analysis, and avoiding raw data dumps into the model context.
+
+Install or update the global CLI and Pi package:
+
+```bash
+npm install -g context-mode
+pi install npm:context-mode
+```
+
+`.pi/agent/settings.json` includes the package entry:
+
+```json
+"npm:context-mode"
+```
+
+Restart Pi, or reload resources from inside Pi when appropriate:
+
+```text
+/reload
+```
+
+Verify the installation:
+
+```bash
+context-mode --help
+npm list -g context-mode --depth=0
+```
+
+Then, inside a fresh Pi session, verify the registered Context Mode tools with:
+
+```text
+ctx stats
+```
+
+Expected routing hierarchy:
+
+- Use CodeGraph first for repository architecture, symbols, call flow, and impact analysis.
+- Use Context Mode `ctx_*` tools for large or noisy outputs, logs, web/fetched content, generated analysis, and session-continuity queries.
+- Use Pi's direct `read` tool for exact source-file inspection.
+- Use Pi's `edit`/`write` tools for precise changes.
+
+Context Mode stores generated session/content data outside this yadm repository; do not commit local Context Mode databases, caches, or generated runtime state.
+
+### 3. OpenSpec
 
 Source: <https://openspec.dev/> / <https://github.com/Fission-AI/OpenSpec>
 
@@ -238,7 +286,7 @@ find ~/.pi/skills -maxdepth 2 -name 'SKILL.md' | sort
 find ~/.pi/prompts -name 'opsx-*.md' | sort
 ```
 
-### 3. Superpowers
+### 4. Superpowers
 
 Source: <https://github.com/obra/superpowers>
 
@@ -279,7 +327,7 @@ Verify:
 find ~/.agents/skills/superpowers/skills -name SKILL.md | sort
 ```
 
-### 4. Pi package skills
+### 5. Pi package skills
 
 These Pi packages are configured in `.pi/agent/settings.json`:
 
@@ -288,7 +336,8 @@ These Pi packages are configured in `.pi/agent/settings.json`:
   "packages": [
     "npm:pi-updater",
     "npm:pi-subagents",
-    "npm:pi-interactive-shell"
+    "npm:pi-interactive-shell",
+    "npm:context-mode"
   ]
 }
 ```
@@ -304,6 +353,10 @@ Expected bundled skills include:
 ```text
 pi-subagents
 pi-interactive-shell
+context-mode
+ctx-stats
+ctx-search
+ctx-index
 ```
 
 Verify:
@@ -312,7 +365,7 @@ Verify:
 pi list
 ```
 
-### 5. Verify skills in Pi
+### 6. Verify skills in Pi
 
 Start Pi and reload resources:
 

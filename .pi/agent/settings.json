@@ -19,7 +19,8 @@
   "packages": [
     "npm:pi-updater",
     "npm:pi-subagents",
-    "npm:pi-interactive-shell"
+    "npm:pi-interactive-shell",
+    "npm:context-mode"
   ],
   "prompts": [
     "~/.pi/prompts"
