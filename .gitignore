@@ -4,9 +4,17 @@
 .pi/agent/run-history.jsonl
 .pi/agent/update-cache.json
 
+# Local env / secret material (keep schemas and samples trackable)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.schema
+
 # Generated dependencies and caches
 **/node_modules/
 **/.cache/
+**/.codegraph/
 **/dist/
 **/build/
 

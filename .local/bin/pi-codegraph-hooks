@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MARKER_START="# >>> pi-codegraph-hooks >>>"
+MARKER_END="# <<< pi-codegraph-hooks <<<"
+
+usage() {
+  cat <<'USAGE'
+Usage: pi-codegraph-hooks <install|remove> [--pre-commit]
+
+Installs or removes repository-local Git hook blocks for CodeGraph.
+Run from inside the target Git repository.
+
+Commands:
+  install        Add defensive post-checkout, post-merge, and post-rewrite sync hooks
+  remove         Remove hook blocks managed by this script
+
+Options:
+  --pre-commit   Also add a non-blocking pre-commit affected-test report
+USAGE
+}
+
+repo_root() {
+  git rev-parse --show-toplevel 2>/dev/null
+}
+
+ensure_hook_file() {
+  local hook="$1"
+  if [ ! -f "$hook" ]; then
+    printf '#!/usr/bin/env bash\n' > "$hook"
+  fi
+  chmod +x "$hook"
+}
+
+sync_block() {
+  cat <<'HOOK'
+# >>> pi-codegraph-hooks >>>
+# Managed by pi-codegraph-hooks. Keep CodeGraph fresh after Git changes.
+{
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$repo_root" ] && command -v codegraph >/dev/null 2>&1 && [ -d "$repo_root/.codegraph" ]; then
+    (
+      cd "$repo_root" && codegraph sync >/dev/null 2>&1
+    ) &
+  fi
+} || true
+# <<< pi-codegraph-hooks <<<
+HOOK
+}
+
+pre_commit_block() {
+  cat <<'HOOK'
+# >>> pi-codegraph-hooks >>>
+# Managed by pi-codegraph-hooks. Report CodeGraph affected tests without blocking commits.
+{
+  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$repo_root" ] && command -v codegraph >/dev/null 2>&1 && [ -d "$repo_root/.codegraph" ]; then
+    files="$(git diff --cached --name-only --diff-filter=ACMR || true)"
+    if [ -n "$files" ]; then
+      echo "CodeGraph affected tests:"
+      printf '%s\n' "$files" | (cd "$repo_root" && codegraph affected --stdin || true)
+    fi
+  fi
+} || true
+# <<< pi-codegraph-hooks <<<
+HOOK
+}
+
+has_managed_block() {
+  local hook="$1"
+  [ -f "$hook" ] && grep -Fq "$MARKER_START" "$hook"
+}
+
+append_block() {
+  local hook="$1"
+  local kind="$2"
+  ensure_hook_file "$hook"
+  if has_managed_block "$hook"; then
+    echo "Already managed: $hook"
+    return 0
+  fi
+  {
+    printf '\n'
+    if [ "$kind" = "pre-commit" ]; then
+      pre_commit_block
+    else
+      sync_block
+    fi
+  } >> "$hook"
+  echo "Installed: $hook"
+}
+
+remove_block() {
+  local hook="$1"
+  [ -f "$hook" ] || return 0
+  if ! has_managed_block "$hook"; then
+    echo "No managed block: $hook"
+    return 0
+  fi
+  python3 - "$hook" "$MARKER_START" "$MARKER_END" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+start = sys.argv[2]
+end = sys.argv[3]
+lines = path.read_text().splitlines(keepends=True)
+out = []
+skip = False
+for line in lines:
+    if start in line:
+        skip = True
+        continue
+    if end in line and skip:
+        skip = False
+        continue
+    if not skip:
+        out.append(line)
+path.write_text(''.join(out))
+PY
+  chmod +x "$hook"
+  echo "Removed managed block: $hook"
+}
+
+main() {
+  local command="${1:-}"
+  local include_pre_commit="false"
+
+  case "$command" in
+    install|remove) shift ;;
+    -h|--help|help|"") usage; exit 0 ;;
+    *) echo "Unknown command: $command" >&2; usage >&2; exit 2 ;;
+  esac
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --pre-commit) include_pre_commit="true" ;;
+      -h|--help) usage; exit 0 ;;
+      *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+  done
+
+  local root
+  root="$(repo_root)" || {
+    echo "Not inside a Git repository" >&2
+    exit 1
+  }
+  local hooks_dir="$root/.git/hooks"
+  mkdir -p "$hooks_dir"
+
+  case "$command" in
+    install)
+      append_block "$hooks_dir/post-checkout" sync
+      append_block "$hooks_dir/post-merge" sync
+      append_block "$hooks_dir/post-rewrite" sync
+      if [ "$include_pre_commit" = "true" ]; then
+        append_block "$hooks_dir/pre-commit" pre-commit
+      fi
+      ;;
+    remove)
+      remove_block "$hooks_dir/post-checkout"
+      remove_block "$hooks_dir/post-merge"
+      remove_block "$hooks_dir/post-rewrite"
+      remove_block "$hooks_dir/pre-commit"
+      ;;
+  esac
+}
+
+main "$@"

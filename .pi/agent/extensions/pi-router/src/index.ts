@@ -14,14 +14,32 @@ export interface PiRouterDependencies {
 	stateStore?: RouterStateStore;
 }
 
-function extractTextContent(content: unknown): string {
+interface PendingRoutedTurn {
+	details: RouterDetailsEntry;
+	shouldTranslateFinalAnswer: boolean;
+}
+
+function extractSingleTextContent(content: unknown): string | null {
 	if (typeof content === "string") return content;
 	if (Array.isArray(content)) {
-		return content
-			.map((part) => part && typeof part === "object" && (part as any).type === "text" ? (part as any).text : "")
-			.join("");
+		const textParts = content.filter((part) => part && typeof part === "object" && (part as any).type === "text");
+		if (textParts.length !== 1) return null;
+		if (typeof (textParts[0] as any).text !== "string") return null;
+		return (textParts[0] as any).text;
 	}
-	return "";
+	return null;
+}
+
+function hasPotentialFinalAnswerText(content: unknown): boolean {
+	if (typeof content === "string") return content.trim().length > 0;
+	if (Array.isArray(content)) {
+		return content.some((part) => part && typeof part === "object" && (part as any).type === "text");
+	}
+	return false;
+}
+
+function hasToolCallContent(content: unknown): boolean {
+	return Array.isArray(content) && content.some((part) => part && typeof part === "object" && (part as any).type === "toolCall");
 }
 
 function replaceTextContent(content: unknown, text: string): unknown {
@@ -39,6 +57,14 @@ function replaceTextContent(content: unknown, text: string): unknown {
 	return [{ type: "text", text }];
 }
 
+function completeSkippedFinalAnswer(entry: RouterDetailsEntry, reason: string): RouterDetailsEntry {
+	return extendRouterDetailsAfterCompletion(entry, {
+		englishAnswer: "",
+		spanishAnswer: "",
+		fallbackEvents: [reason],
+	});
+}
+
 export default function piRouterExtension(pi: ExtensionAPI) {
 	installPiRouter(pi, {});
 }
@@ -47,7 +73,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	const stateStore = dependencies.stateStore ?? createFileRouterStateStore();
 	const persistedState = stateStore.loadState();
 	let config: RouterConfig = { ...(dependencies.config ?? DEFAULT_ROUTER_CONFIG), ...(persistedState ? { state: persistedState } : {}) };
-	let lastDetails: RouterDetailsEntry | undefined;
+	const pendingRoutedTurns: PendingRoutedTurn[] = [];
 
 	function setRouterState(state: RouterConfig["state"], ctx: any) {
 		config = { ...config, state };
@@ -78,25 +104,46 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	});
 
 	pi.on("message_end", async (event, ctx) => {
-		if (!lastDetails || event.message?.role !== "assistant") {
+		if (event.message?.role !== "assistant") {
 			return;
 		}
-		const englishAnswer = extractTextContent(event.message.content);
+		if (hasToolCallContent(event.message.content)) {
+			return;
+		}
+		if (!hasPotentialFinalAnswerText(event.message.content)) {
+			return;
+		}
+		const pendingTurn = pendingRoutedTurns.shift();
+		if (!pendingTurn) {
+			return;
+		}
+		const detailsForTurn = pendingTurn.details;
+		const shouldTranslateFinalAnswer = pendingTurn.shouldTranslateFinalAnswer;
+
+		if (!shouldTranslateFinalAnswer) {
+			return;
+		}
+
+		const englishAnswer = extractSingleTextContent(event.message.content);
+		if (englishAnswer === null) {
+			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: unsupported message content"));
+			return;
+		}
 		if (!englishAnswer.trim()) {
 			return;
 		}
 		const translate = dependencies.translateFinalAnswer
 			?? ((answer: string, routerModel: RouterConfig["routerModel"]) => translateFinalAnswerToSpanish(answer, routerModel));
 		const translated = await translate(englishAnswer, config.routerModel);
-		lastDetails = extendRouterDetailsAfterCompletion(lastDetails, {
+		const completedDetails = extendRouterDetailsAfterCompletion(detailsForTurn, {
 			englishAnswer: translated.englishAnswer,
 			spanishAnswer: translated.spanishAnswer,
 			effectiveThinkingLevel: typeof (pi as any).getThinkingLevel === "function" ? (pi as any).getThinkingLevel() : undefined,
 			fallbackEvents: translated.degradedReason ? [translated.degradedReason] : undefined,
 		});
-		pi.appendEntry("pi-router-details", lastDetails);
+		pi.appendEntry("pi-router-details", completedDetails);
 		if (translated.degradedReason) {
-			const warning = `Pi router warning: ${translated.degradedReason}; showing original answer.`;
+			const warning = `Pi router warning: ${translated.degradedReason}; showing original or partially translated answer.`;
 			if (ctx?.ui?.notify) {
 				ctx.ui.notify(warning, "warning");
 			} else if (typeof (pi as any).notify === "function") {
@@ -131,7 +178,6 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			return { action: "continue" };
 		}
 		if (prepared.action === "handled") {
-			lastDetails = prepared.details;
 			pi.appendEntry("pi-router-details", prepared.details);
 			ctx.ui.notify(prepared.message, "warning");
 			ctx.ui.setStatus("pi-router", `router:${config.state} degraded`);
@@ -139,7 +185,10 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		}
 
 		pi.setThinkingLevel(prepared.result.thinkingLevel);
-		lastDetails = prepared.details;
+		pendingRoutedTurns.push({
+			details: prepared.details,
+			shouldTranslateFinalAnswer: prepared.result.translateFinalAnswer,
+		});
 		pi.appendEntry("pi-router-details", prepared.details);
 		if (prepared.warning) {
 			ctx.ui.notify(prepared.warning, "warning");

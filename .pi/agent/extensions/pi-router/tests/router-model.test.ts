@@ -118,6 +118,79 @@ describe("local router model", () => {
 		assert.equal(result.englishPrompt, `Review ${pathReference}`);
 	});
 
+	it("restores protected placeholders translated to Spanish while routing", async () => {
+		const pathReference = ".pi/agent/extensions/pi-router/src/final-answer.ts";
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({
+				choices: [{ message: { content: '{"translation":"Review __PI_ROUTER_PROTEGIDO_0__","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
+			}),
+		});
+
+		const result = await routePromptWithModel(`Revisa ${pathReference}`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(result.englishPrompt, `Review ${pathReference}`);
+	});
+
+	it("masks fenced blocks before routing and restores them when the model preserves the placeholder", async () => {
+		let body: any;
+		const fencedBlock = [
+			"```",
+			"No. I onlly updated this repository’s project-local extension files:",
+			"",
+			" - __PI_ROUTER_PROTEGIDO_0__",
+			" - __PI_ROUTER_PROTEGIDO_1__",
+			"```",
+		].join("\n");
+		const fetchLike = async (_url: string, init: any) => {
+			body = JSON.parse(init.body);
+			return {
+				ok: true,
+				json: async () => ({
+					choices: [{ message: { content: '{"translation":"Review both bugs. __PI_ROUTER_PRESERVED_BLOCK_0__","sourceLanguage":"es","thinkingLevel":"high","translateFinalAnswer":true}' } }],
+				}),
+			};
+		};
+
+		const result = await routePromptWithModel(
+			`Veo otro error:\n${fencedBlock}\nRevisa ambos bugs.`,
+			DEFAULT_ROUTER_CONFIG.routerModel,
+			fetchLike,
+		);
+
+		assert.doesNotMatch(body.messages[0].content, /onlly updated/);
+		assert.match(body.messages[0].content, /__PI_ROUTER_PRESERVED_BLOCK_0__/);
+		assert.equal(result.englishPrompt, `Review both bugs. ${fencedBlock}`);
+	});
+
+	it("keeps user-provided fenced blocks when the router model drops their placeholders", async () => {
+		const fencedBlock = [
+			"```",
+			"No. I onlly updated this repository’s project-local extension files:",
+			"",
+			" - __PI_ROUTER_PROTEGIDO_0__",
+			" - __PI_ROUTER_PROTEGIDO_1__",
+			"```",
+		].join("\n");
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({
+				choices: [{ message: { content: '{"translation":"Review both bugs.","sourceLanguage":"es","thinkingLevel":"high","translateFinalAnswer":true}' } }],
+			}),
+		});
+
+		const result = await routePromptWithModel(
+			`Veo otro error:\n${fencedBlock}\nRevisa ambos bugs.`,
+			DEFAULT_ROUTER_CONFIG.routerModel,
+			fetchLike,
+		);
+
+		assert.match(result.englishPrompt, /^Review both bugs\./);
+		assert.match(result.englishPrompt, /User-provided fenced content:/);
+		assert.match(result.englishPrompt, /No\. I onlly updated this repository’s project-local extension files:/);
+		assert.match(result.englishPrompt, /__PI_ROUTER_PROTEGIDO_0__/);
+	});
+
 	it("records unresolved references without inventing intent", async () => {
 		const fetchLike = async () => ({
 			ok: true,
@@ -164,7 +237,8 @@ describe("local router model", () => {
 
 		await routePromptWithModel("corre `pytest tests/test_cli.py`", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
-		assert.match(routerPrompt, /Preserve commands, paths, identifiers, quoted strings, and error messages/);
+		assert.match(routerPrompt, /Preserve commands, paths, identifiers, quoted strings, exact placeholders, and error messages/);
+		assert.match(routerPrompt, /fenced blocks inside TASK are part of the latest user prompt data/);
 	});
 
 	it("parses the first valid JSON object and ignores repeated trailing text", async () => {

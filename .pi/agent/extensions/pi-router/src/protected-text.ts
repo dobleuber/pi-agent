@@ -26,7 +26,7 @@ export function maskProtectedSpans(text: string): ProtectedTextMask {
 			let restored = output;
 			values.forEach((value, index) => {
 				const optionalAt = value.startsWith("@") ? "@?" : "";
-				const placeholder = new RegExp(`${optionalAt}_{0,2}PI_ROUTER_PROTECI?TED_${index}_{0,2}`, "g");
+				const placeholder = new RegExp(`${optionalAt}_{0,2}PI_ROUTER_(?:PROTECI?TED|PROTEGID[OA])_${index}_{0,2}`, "gi");
 				restored = restored.replace(placeholder, value);
 			});
 			return restored;
