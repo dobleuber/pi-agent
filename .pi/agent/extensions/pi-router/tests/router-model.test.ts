@@ -94,7 +94,7 @@ describe("local router model", () => {
 			return {
 				ok: true,
 				json: async () => ({
-					choices: [{ message: { content: '{"translation":"Review __PI_ROUTER_PROTECTED_0__ without changing it.","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
+					choices: [{ message: { content: '{"translation":"Review §P0§ without changing it.","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
 				}),
 			};
 		};
@@ -103,7 +103,8 @@ describe("local router model", () => {
 
 		const routedInput = JSON.parse(body.messages.at(-1).content);
 		assert.doesNotMatch(routedInput.task, /mejorar-naturalidad-salida-hablada-roger/);
-		assert.match(routedInput.task, /__PI_ROUTER_PROTECTED_0__/);
+		assert.match(routedInput.task, /§P0§/);
+		assert.doesNotMatch(routedInput.task, /__PI_ROUTER_PROTECTED_0__/);
 		assert.equal(result.englishPrompt, `Review ${path} without changing it.`);
 	});
 
@@ -115,7 +116,7 @@ describe("local router model", () => {
 			return {
 				ok: true,
 				json: async () => ({
-					choices: [{ message: { content: '{"translation":"Review __PI_ROUTER_PROTECTED_0__","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
+					choices: [{ message: { content: '{"translation":"Review §P0§","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
 				}),
 			};
 		};
@@ -124,16 +125,17 @@ describe("local router model", () => {
 
 		const routedInput = JSON.parse(body.messages.at(-1).content);
 		assert.doesNotMatch(routedInput.task, /src\/router-model\.ts/);
-		assert.match(routedInput.task, /__PI_ROUTER_PROTECTED_0__/);
+		assert.match(routedInput.task, /§P0§/);
+		assert.doesNotMatch(routedInput.task, /__PI_ROUTER_PROTECTED_0__/);
 		assert.equal(result.englishPrompt, `Review ${pathReference}`);
 	});
 
-	it("restores protected placeholders translated to Spanish while routing", async () => {
+	it("restores opaque protected placeholders while routing", async () => {
 		const pathReference = ".pi/agent/extensions/pi-router/src/final-answer.ts";
 		const fetchLike = async () => ({
 			ok: true,
 			json: async () => ({
-				choices: [{ message: { content: '{"translation":"Review __PI_ROUTER_PROTEGIDO_0__","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
+				choices: [{ message: { content: '{"translation":"Review §P0§","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
 			}),
 		});
 

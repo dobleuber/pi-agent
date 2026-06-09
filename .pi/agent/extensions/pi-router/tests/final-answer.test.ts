@@ -413,14 +413,15 @@ describe("final answer translation", () => {
 			body = JSON.parse(init.body);
 			return {
 				ok: true,
-				json: async () => ({ choices: [{ message: { content: "<SPANISH>Sin tocar __PI_ROUTER_PROTECTED_0__.</SPANISH>" } }] }),
+				json: async () => ({ choices: [{ message: { content: "<SPANISH>Sin tocar §P0§.</SPANISH>" } }] }),
 			};
 		};
 
 		const result = await translateFinalAnswerToSpanish(`Do not change ${path}.`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
 		assert.doesNotMatch(body.messages[0].content, /add-roger-concurrent-interruption-listening/);
-		assert.match(body.messages[0].content, /__PI_ROUTER_PROTECTED_0__/);
+		assert.match(body.messages[0].content, /§P0§/);
+		assert.doesNotMatch(body.messages[0].content, /__PI_ROUTER_PROTECTED_0__/);
 		assert.equal(result.spanishAnswer, `Sin tocar ${path}.`);
 	});
 
@@ -430,7 +431,7 @@ describe("final answer translation", () => {
 			body = JSON.parse(init.body);
 			return {
 				ok: true,
-				json: async () => ({ choices: [{ message: { content: "<SPANISH>Puede estar installed/copied/symlinked en __PI_ROUTER_PROTECTED_0__.</SPANISH>" } }] }),
+				json: async () => ({ choices: [{ message: { content: "<SPANISH>Puede estar installed/copied/symlinked en §P0§.</SPANISH>" } }] }),
 			};
 		};
 
@@ -444,11 +445,11 @@ describe("final answer translation", () => {
 		assert.equal(result.spanishAnswer, "Puede estar installed/copied/symlinked en ~/.pi/agent/extensions/pi-router/.");
 	});
 
-	it("restores observed misspelled protected placeholders from translated final answers", async () => {
+	it("restores opaque protected placeholders from translated final answers", async () => {
 		const path = "@~/.pi/agent/extensions/pi-router/README.md";
 		const fetchLike = async () => ({
 			ok: true,
-			json: async () => ({ choices: [{ message: { content: "<SPANISH>El archivo @__PI_ROUTER_PROTECITED_0__ dice eso.</SPANISH>" } }] }),
+			json: async () => ({ choices: [{ message: { content: "<SPANISH>El archivo §P0§ dice eso.</SPANISH>" } }] }),
 		});
 
 		const result = await translateFinalAnswerToSpanish(`The file ${path} says that.`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
@@ -456,7 +457,7 @@ describe("final answer translation", () => {
 		assert.equal(result.spanishAnswer, `El archivo ${path} dice eso.`);
 	});
 
-	it("restores protected placeholders translated to Spanish from final answers", async () => {
+	it("restores multiple opaque protected placeholders from final answers", async () => {
 		const firstPath = ".pi/agent/extensions/pi-router/src/final-answer.ts";
 		const secondPath = ".pi/agent/extensions/pi-router/src/index.ts";
 		const fetchLike = async () => ({
@@ -464,8 +465,8 @@ describe("final answer translation", () => {
 			json: async () => ({ choices: [{ message: { content: [
 				"Solo actualicé:",
 				"",
-				"- __PI_ROUTER_PROTEGIDO_0__",
-				"- __PI_ROUTER_PROTEGIDO_1__",
+				"- §P0§",
+				"- §P1§",
 			].join("\n") } }] }),
 		});
 
@@ -483,15 +484,15 @@ describe("final answer translation", () => {
 		].join("\n"));
 	});
 
-	it("restores shortened protected placeholder misspellings from final answers", async () => {
+	it("restores opaque protected placeholders in multiline final answers", async () => {
 		const firstPath = ".pi/agent/extensions/pi-router/src/final-answer.ts";
 		const secondPath = ".pi/agent/extensions/pi-router/tests/final-answer.test.ts";
 		const fetchLike = async () => ({
 			ok: true,
 			json: async () => ({ choices: [{ message: { content: [
 				"Cambios hechos:",
-				"- PI_ROUTER_PROTECED_0",
-				"- PI_ROUTER_PROTCED_1",
+				"- §P0§",
+				"- §P1§",
 			].join("\n") } }] }),
 		});
 

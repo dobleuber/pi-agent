@@ -50,7 +50,7 @@ Rules:
 - If sourceLanguage is en, translateFinalAnswer should be false.
 - sourceLanguage is based on the original task text, not the English translation.
 - Preserve commands, paths, identifiers, quoted strings, exact placeholders, and error messages exactly.
-- Preserve placeholders like __PI_ROUTER_PROTECTED_0__ and __PI_ROUTER_PRESERVED_BLOCK_0__ exactly.
+- Preserve placeholders like §P0§ and __PI_ROUTER_PRESERVED_BLOCK_0__ exactly.
 - Quoted text and fenced blocks inside the task are part of the latest user prompt data; keep them when they contain examples, errors, prior messages, or bug evidence.
 - Use conversation context only to resolve references such as "eso", "lo anterior", or "option 2".
 - Do not add requirements, constraints, or tasks that are not stated by the latest user prompt or clearly referenced from context.

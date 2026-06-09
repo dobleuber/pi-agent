@@ -4,8 +4,8 @@ export interface ProtectedTextMask {
 	values: string[];
 }
 
-const PROTECTED_TOKEN_PREFIX = "__PI_ROUTER_PROTECTED_";
-const PROTECTED_TOKEN_SUFFIX = "__";
+const PROTECTED_TOKEN_PREFIX = "§P";
+const PROTECTED_TOKEN_SUFFIX = "§";
 const PROTECTED_SPAN_PATTERN = /https?:\/\/[^\s`'"<>)\]]+|@?(?:\.{1,2}|~|\/?[A-Za-z0-9_.-]+)\/[^\s`'"<>)\]]+/g;
 const TRAILING_PUNCTUATION_PATTERN = /[.,;:!?]+$/;
 
@@ -25,9 +25,7 @@ export function maskProtectedSpans(text: string): ProtectedTextMask {
 		restore(output: string): string {
 			let restored = output;
 			values.forEach((value, index) => {
-				const optionalAt = value.startsWith("@") ? "@?" : "";
-				const protectedVariants = "(?:PROTECTED|PROTECITED|PROTECED|PROTCED|PROTEGID[OA])";
-				const placeholder = new RegExp(`${optionalAt}_{0,2}PI_ROUTER_${protectedVariants}_${index}_{0,2}`, "gi");
+				const placeholder = new RegExp(`§P${index}§`, "g");
 				restored = restored.replace(placeholder, value);
 			});
 			return restored;
