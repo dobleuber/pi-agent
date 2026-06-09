@@ -42,7 +42,7 @@ export const DEFAULT_ROUTER_CONFIG: RouterConfig = {
 		provider: "llama-cpp",
 		model: "gemma4",
 		baseUrl: "http://127.0.0.1:11434/v1",
-		timeoutMs: 5000,
+		timeoutMs: 15000,
 		fallbackMode: "passthrough-with-warning",
 		maxInputChars: 12000,
 	},

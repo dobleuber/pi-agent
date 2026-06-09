@@ -13,7 +13,7 @@ describe("router configuration", () => {
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.provider, "llama-cpp");
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.model, "gemma4");
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.baseUrl, "http://127.0.0.1:11434/v1");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.timeoutMs, 5000);
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.timeoutMs, 15000);
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.fallbackMode, "passthrough-with-warning");
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.maxInputChars, 12000);
 	});
