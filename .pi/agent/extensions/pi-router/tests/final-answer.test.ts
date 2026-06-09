@@ -66,7 +66,8 @@ describe("final answer translation", () => {
 
 		await translateFinalAnswerToSpanish("Run `pytest tests/test_cli.py`.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
-		assert.match(translatorPrompt, /`pytest __PI_ROUTER_PROTECTED_0__`/);
+		assert.match(translatorPrompt, /Run __PI_ROUTER_INLINE_0__\./);
+		assert.doesNotMatch(translatorPrompt, /pytest tests\/test_cli\.py/);
 	});
 
 	it("cleans chat-template artifacts from translated final answers", async () => {
@@ -479,6 +480,67 @@ describe("final answer translation", () => {
 			"",
 			`- ${firstPath}`,
 			`- ${secondPath}`,
+		].join("\n"));
+	});
+
+	it("restores shortened protected placeholder misspellings from final answers", async () => {
+		const firstPath = ".pi/agent/extensions/pi-router/src/final-answer.ts";
+		const secondPath = ".pi/agent/extensions/pi-router/tests/final-answer.test.ts";
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: [
+				"Cambios hechos:",
+				"- PI_ROUTER_PROTECED_0",
+				"- PI_ROUTER_PROTCED_1",
+			].join("\n") } }] }),
+		});
+
+		const result = await translateFinalAnswerToSpanish(
+			`Changes made: ${firstPath} and ${secondPath}.`,
+			DEFAULT_ROUTER_CONFIG.routerModel,
+			fetchLike,
+		);
+
+		assert.equal(result.spanishAnswer, [
+			"Cambios hechos:",
+			`- ${firstPath}`,
+			`- ${secondPath}`,
+		].join("\n"));
+	});
+
+	it("preserves inline commands instead of leaking malformed placeholder suffixes", async () => {
+		let body: any;
+		const fetchLike = async (_url: string, init: any) => {
+			body = JSON.parse(init.body);
+			return {
+				ok: true,
+				json: async () => ({ choices: [{ message: { content: "- __PI_ROUTER_INLINE_0__ ❌ script faltante" } }] }),
+			};
+		};
+
+		const result = await translateFinalAnswerToSpanish("- `npm run build` ❌ missing script", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.doesNotMatch(body.messages[0].content, /npm run build/);
+		assert.match(body.messages[0].content, /__PI_ROUTER_INLINE_0__/);
+		assert.equal(result.spanishAnswer, "- `npm run build` ❌ script faltante");
+	});
+
+	it("normalizes non-breaking-space byte artifacts in translated output", async () => {
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: [
+				"- Fibonacci:",
+				"   <0xC2><0xA0>- fibonacciRecursive",
+				"   \u00A0- fibonacciIterative",
+			].join("\n") } }] }),
+		});
+
+		const result = await translateFinalAnswerToSpanish("- Fibonacci:\n   - fibonacciRecursive\n   - fibonacciIterative", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(result.spanishAnswer, [
+			"- Fibonacci:",
+			"   - fibonacciRecursive",
+			"   - fibonacciIterative",
 		].join("\n"));
 	});
 
