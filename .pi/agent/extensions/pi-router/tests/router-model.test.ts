@@ -4,7 +4,7 @@ import { DEFAULT_ROUTER_CONFIG } from "../src/config.ts";
 import { createRouterMetadata, routePromptWithModel } from "../src/router-model.ts";
 
 describe("local router model", () => {
-	it("calls llama.cpp gemma4 to translate a Spanish prompt into an English work prompt", async () => {
+	it("calls llama.cpp gemma4 with chat-role few-shot messages and JSON-only controls", async () => {
 		const calls: Array<{ url: string; body: any }> = [];
 		const fetchLike = async (url: string, init: any) => {
 			calls.push({ url, body: JSON.parse(init.body) });
@@ -15,9 +15,12 @@ describe("local router model", () => {
 						message: {
 							content: JSON.stringify({
 								sourceLanguage: "es",
-								englishPrompt: "Improve the Pi router.",
+								translation: "Improve the Pi router.",
 								thinkingLevel: "medium",
 								translateFinalAnswer: true,
+								usedConversationContext: false,
+								resolvedReferences: [],
+								unresolvedReferences: [],
 							}),
 						},
 					}],
@@ -29,9 +32,12 @@ describe("local router model", () => {
 
 		assert.equal(calls[0].url, "http://127.0.0.1:11434/v1/chat/completions");
 		assert.equal(calls[0].body.model, "gemma4");
-		assert.equal(calls[0].body.messages.length, 1);
-		assert.equal(calls[0].body.messages[0].role, "user");
-		assert.match(calls[0].body.messages[0].content, /<TASK>mejora el router de Pi<\/TASK>/);
+		assert.deepEqual(calls[0].body.stop, ["<|im_end|>"]);
+		assert.deepEqual(calls[0].body.response_format, { type: "json_object" });
+		assert.equal(calls[0].body.messages.length, 4);
+		assert.deepEqual(calls[0].body.messages.map((message: any) => message.role), ["system", "user", "assistant", "user"]);
+		assert.doesNotMatch(calls[0].body.messages.at(-1).content, /<TASK>/);
+		assert.deepEqual(JSON.parse(calls[0].body.messages.at(-1).content), { task: "mejora el router de Pi" });
 		assert.equal(result.englishPrompt, "Improve the Pi router.");
 		assert.equal(result.sourceLanguage, "es");
 		assert.equal(result.thinkingLevel, "medium");
@@ -69,10 +75,12 @@ describe("local router model", () => {
 			{ conversationSummary: "The current topic is adding a router details toggle." },
 		);
 
-		assert.equal(body.messages.length, 1);
+		assert.equal(body.messages.length, 4);
 		assert.match(body.messages[0].content, /Use conversation context only to resolve references/);
-		assert.match(body.messages[0].content, /Conversation context for reference resolution only:\nThe current topic is adding a router details toggle\./);
-		assert.match(body.messages[0].content, /<TASK>agrega eso al router de Pi<\/TASK>/);
+		assert.deepEqual(JSON.parse(body.messages.at(-1).content), {
+			task: "agrega eso al router de Pi",
+			conversationContext: "The current topic is adding a router details toggle.",
+		});
 		assert.equal(result.usedConversationContext, true);
 		assert.deepEqual(result.resolvedReferences, ["eso = router details toggle"]);
 		assert.deepEqual(result.unresolvedReferences, []);
@@ -93,8 +101,9 @@ describe("local router model", () => {
 
 		const result = await routePromptWithModel(`Revisa ${path} sin cambiarlo`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
-		assert.doesNotMatch(body.messages[0].content, /mejorar-naturalidad-salida-hablada-roger/);
-		assert.match(body.messages[0].content, /__PI_ROUTER_PROTECTED_0__/);
+		const routedInput = JSON.parse(body.messages.at(-1).content);
+		assert.doesNotMatch(routedInput.task, /mejorar-naturalidad-salida-hablada-roger/);
+		assert.match(routedInput.task, /__PI_ROUTER_PROTECTED_0__/);
 		assert.equal(result.englishPrompt, `Review ${path} without changing it.`);
 	});
 
@@ -113,8 +122,9 @@ describe("local router model", () => {
 
 		const result = await routePromptWithModel(`Revisa ${pathReference}`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
-		assert.doesNotMatch(body.messages[0].content, /src\/router-model\.ts/);
-		assert.match(body.messages[0].content, /__PI_ROUTER_PROTECTED_0__/);
+		const routedInput = JSON.parse(body.messages.at(-1).content);
+		assert.doesNotMatch(routedInput.task, /src\/router-model\.ts/);
+		assert.match(routedInput.task, /__PI_ROUTER_PROTECTED_0__/);
 		assert.equal(result.englishPrompt, `Review ${pathReference}`);
 	});
 
@@ -158,8 +168,9 @@ describe("local router model", () => {
 			fetchLike,
 		);
 
-		assert.doesNotMatch(body.messages[0].content, /onlly updated/);
-		assert.match(body.messages[0].content, /__PI_ROUTER_PRESERVED_BLOCK_0__/);
+		const routedInput = JSON.parse(body.messages.at(-1).content);
+		assert.doesNotMatch(routedInput.task, /onlly updated/);
+		assert.match(routedInput.task, /__PI_ROUTER_PRESERVED_BLOCK_0__/);
 		assert.equal(result.englishPrompt, `Review both bugs. ${fencedBlock}`);
 	});
 
@@ -238,22 +249,21 @@ describe("local router model", () => {
 		await routePromptWithModel("corre `pytest tests/test_cli.py`", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
 		assert.match(routerPrompt, /Preserve commands, paths, identifiers, quoted strings, exact placeholders, and error messages/);
-		assert.match(routerPrompt, /fenced blocks inside TASK are part of the latest user prompt data/);
+		assert.match(routerPrompt, /fenced blocks inside the task are part of the latest user prompt data/);
 	});
 
-	it("parses the first valid JSON object and ignores repeated trailing text", async () => {
+	it("falls back instead of parsing the first JSON object from contaminated router output", async () => {
 		const fetchLike = async () => ({
 			ok: true,
 			json: async () => ({
-				choices: [{ message: { content: '{"translation":"Give the current status of the router","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}\n</TASK>\n{"translation":"repeated"}' } }],
+				choices: [{ message: { content: 'No, no estoy asumiendo nada.\n<|im_end|>\n<TASK>Entonces, ¿qué debo hacer?</TASK>\n{"translation":"What should I do then?","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' } }],
 			}),
 		});
 
 		const result = await routePromptWithModel("Dame el estado actual del router", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
-		assert.equal(result.englishPrompt, "Give the current status of the router");
-		assert.equal(result.sourceLanguage, "es");
-		assert.equal(result.translateFinalAnswer, true);
+		assert.equal(result.englishPrompt, "Dame el estado actual del router");
+		assert.match(result.degradedReason ?? "", /router model returned invalid JSON/);
 	});
 
 	it("creates metadata for logs and details inspection", () => {
