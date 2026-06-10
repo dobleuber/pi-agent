@@ -575,6 +575,44 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(notifications, ["Pi router disabled", "Pi router enabled"]);
 	});
 
+	it("reloads shared router state before commands and routing decisions", async () => {
+		let sharedState: any = { state: "on", localMode: "on" };
+		const createPi = () => {
+			const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+			const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+			const pi = {
+				registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
+				on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
+				setThinkingLevel() {},
+				appendEntry() {},
+			};
+			installPiRouter(pi as any, {
+				stateStore: {
+					loadState: () => sharedState,
+					saveState: (state) => { sharedState = state; },
+				},
+				routePrompt: async () => ({
+					englishPrompt: "Should not route while globally off.",
+					sourceLanguage: "es",
+					thinkingLevel: "medium",
+					translateFinalAnswer: true,
+				}),
+			});
+			return { commands, handlers };
+		};
+		const sessionA = createPi();
+		const sessionB = createPi();
+		const notificationsB: string[] = [];
+		const ctx = { ui: { notify(message: string) { notificationsB.push(message); }, setStatus() {} } };
+
+		await sessionA.commands.get("router")!.handler("off", { ui: { notify() {}, setStatus() {} } });
+		await sessionB.commands.get("router")!.handler("", ctx);
+		const inputResult = await sessionB.handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
+
+		assert.deepEqual(inputResult, { action: "continue" });
+		assert.deepEqual(notificationsB, ["router:off local:on routerModel:llama-cpp/gemma4 workModel:unknown"]);
+	});
+
 	it("switches local mode off, persists it, selects remote routing, and stops local llama.cpp", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
@@ -587,8 +625,9 @@ describe("pi-router extension entrypoint", () => {
 		};
 		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
 
+		let persistedState: any;
 		installPiRouter(pi as any, {
-			stateStore: { loadState: () => undefined, saveState: (state) => savedStates.push(state) },
+			stateStore: { loadState: () => persistedState, saveState: (state) => { persistedState = state; savedStates.push(state); } },
 			localLifecycle: {
 				ensureRunning: async () => ({ status: "already-running" }),
 				stop: async (model) => { stoppedModels.push(`${model.provider}/${model.model}`); return { status: "stopped" }; },
@@ -617,8 +656,9 @@ describe("pi-router extension entrypoint", () => {
 		};
 		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
 
+		let persistedState: any = { localMode: "off" };
 		installPiRouter(pi as any, {
-			stateStore: { loadState: () => ({ localMode: "off" }), saveState: (state) => savedStates.push(state) },
+			stateStore: { loadState: () => persistedState, saveState: (state) => { persistedState = state; savedStates.push(state); } },
 			localLifecycle: {
 				ensureRunning: async (model) => { ensuredModels.push(`${model.provider}/${model.model}`); return { status: "started" }; },
 				stop: async () => ({ status: "stopped" }),
@@ -694,8 +734,9 @@ describe("pi-router extension entrypoint", () => {
 		};
 		const ctx = { ui: { notify() {}, setStatus() {} } };
 
+		let persistedState: any = { localMode: "off" };
 		installPiRouter(pi as any, {
-			stateStore: { loadState: () => ({ localMode: "off" }), saveState() {} },
+			stateStore: { loadState: () => persistedState, saveState(state) { persistedState = state; } },
 			routePrompt: async (_prompt, routerModel) => {
 				routedModels.push(`${routerModel.provider}/${routerModel.model}`);
 				return {
@@ -725,9 +766,10 @@ describe("pi-router extension entrypoint", () => {
 		};
 		const ctx = { ui: { notify() {}, setStatus() {} } };
 
+		let persistedState: any = { localMode: "off" };
 		installPiRouter(pi as any, {
-			stateStore: { loadState: () => ({ localMode: "off" }), saveState() {} },
-			routePrompt: async () => ({
+			stateStore: { loadState: () => persistedState, saveState(state) { persistedState = state; } },
+			routePrompt: async () => ({ 
 				englishPrompt: "Improve the router.",
 				sourceLanguage: "es",
 				thinkingLevel: "medium",

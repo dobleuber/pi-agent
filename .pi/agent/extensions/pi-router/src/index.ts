@@ -96,27 +96,41 @@ export default function piRouterExtension(pi: ExtensionAPI) {
 export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependencies = {}) {
 	const stateStore = dependencies.stateStore ?? createFileRouterStateStore();
 	const localLifecycle = dependencies.localLifecycle ?? createLocalRouterLifecycle();
-	const persistedState = stateStore.loadState();
-	const persistedConfig = typeof persistedState === "string" ? { state: persistedState } : (persistedState ?? {});
 	const initialConfig = dependencies.config ?? DEFAULT_ROUTER_CONFIG;
-	const selectedInitialLocalMode = (persistedConfig.localMode ?? initialConfig.localMode) as RouterConfig["localMode"];
-	const routerModels = dependencies.config?.routerModel
-		? { ...initialConfig.routerModels, [selectedInitialLocalMode === "off" ? "remote" : "local"]: dependencies.config.routerModel }
-		: initialConfig.routerModels;
-	let config: RouterConfig = refreshActiveRouterModel({ ...initialConfig, routerModels, ...persistedConfig });
 	const pendingRoutedTurns: PendingRoutedTurn[] = [];
+
+	function loadPersistedConfig(): Partial<Pick<RouterConfig, "state" | "localMode">> {
+		const persistedState = stateStore.loadState() as any;
+		return typeof persistedState === "string" ? { state: persistedState } : (persistedState ?? {});
+	}
+
+	function configFromPersistedState(persistedConfig: Partial<Pick<RouterConfig, "state" | "localMode">>): RouterConfig {
+		const selectedLocalMode = (persistedConfig.localMode ?? initialConfig.localMode) as RouterConfig["localMode"];
+		const routerModels = dependencies.config?.routerModel
+			? { ...initialConfig.routerModels, [selectedLocalMode === "off" ? "remote" : "local"]: dependencies.config.routerModel }
+			: initialConfig.routerModels;
+		return refreshActiveRouterModel({ ...initialConfig, routerModels, ...persistedConfig });
+	}
+
+	function refreshRouterSettingsFromStore() {
+		config = configFromPersistedState(loadPersistedConfig());
+	}
+
+	let config: RouterConfig = configFromPersistedState(loadPersistedConfig());
 
 	function saveRouterSettings() {
 		stateStore.saveState({ state: config.state, localMode: config.localMode });
 	}
 
 	function setRouterState(state: RouterConfig["state"], ctx: any) {
+		refreshRouterSettingsFromStore();
 		config = refreshActiveRouterModel({ ...config, state });
 		saveRouterSettings();
 		ctx.ui.setStatus("pi-router", `router:${config.state}`);
 	}
 
 	async function setLocalMode(localMode: RouterConfig["localMode"], ctx: any) {
+		refreshRouterSettingsFromStore();
 		config = refreshActiveRouterModel({ ...config, localMode });
 		saveRouterSettings();
 		if (localMode === "on") {
@@ -141,6 +155,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	pi.registerCommand("router", {
 		description: "Show or change Pi router status: /router, /router on, /router off, /router local on, /router local off",
 		handler: async (args, ctx) => {
+			refreshRouterSettingsFromStore();
 			const command = args.trim().toLowerCase();
 			if (command === "on") {
 				setRouterState("on", ctx);
@@ -169,10 +184,12 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
+		refreshRouterSettingsFromStore();
 		ctx.ui.setStatus("pi-router", `router:${config.state}`);
 	});
 
 	pi.on("message_end", async (event, ctx) => {
+		refreshRouterSettingsFromStore();
 		if (event.message?.role !== "assistant") {
 			return;
 		}
@@ -228,6 +245,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	});
 
 	pi.on("input", async (event, ctx) => {
+		refreshRouterSettingsFromStore();
 		if (!shouldRouteInput({ text: event.text, source: event.source })) {
 			return { action: "continue" };
 		}
