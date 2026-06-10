@@ -43,6 +43,7 @@ export interface WorkModelInfo {
 export interface RouterStatusInput {
 	config: RouterConfig;
 	workModel?: WorkModelInfo | null;
+	effectiveRouterModel?: WorkModelInfo | null;
 	degradedReason?: string | null;
 }
 
@@ -94,16 +95,23 @@ export function resolveRouterState(
 
 export function routerStatusSummary(input: RouterStatusInput): string {
 	const activeRouterModel = resolveRouterModel(input.config);
-	const routerModel = formatModel(activeRouterModel.provider, activeRouterModel.model);
+	const routerTarget = formatModel(activeRouterModel.provider, activeRouterModel.model);
+	const routerModel = input.effectiveRouterModel
+		? formatModel(input.effectiveRouterModel.provider, input.effectiveRouterModel.model)
+		: routerTarget;
 	const workModel = formatModel(input.workModel?.provider, input.workModel?.model);
-	const parts = [`router:${input.config.state}`, `local:${input.config.localMode}`, `routerModel:${routerModel}`, `workModel:${workModel}`];
+	const parts = [`router:${input.config.state}`, `local:${input.config.localMode}`, `routerModel:${routerModel}`];
+	if (routerModel !== routerTarget) {
+		parts.push(`routerTarget:${routerTarget}`);
+	}
+	parts.push(`workModel:${workModel}`);
 	if (input.degradedReason) {
 		parts.push(`degraded:${input.degradedReason}`);
 	}
 	return parts.join(" ");
 }
 
-function formatModel(provider?: string, model?: string): string {
+export function formatModel(provider?: string, model?: string): string {
 	if (!provider && !model) return "unknown";
 	if (!provider) return model ?? "unknown";
 	if (!model) return provider;

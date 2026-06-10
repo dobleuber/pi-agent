@@ -1,9 +1,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_ROUTER_CONFIG, resolveRouterModel, routerStatusSummary, type RouterConfig } from "./config.ts";
+import { DEFAULT_ROUTER_CONFIG, formatModel, resolveRouterModel, routerStatusSummary, type RouterConfig, type WorkModelInfo } from "./config.ts";
 import { extendRouterDetailsAfterCompletion, type RouterDetailsEntry } from "./details.ts";
 import { translateFinalAnswerToSpanish, type FinalAnswerTranslationResult } from "./final-answer.ts";
 import { shouldRouteInput } from "./input.ts";
 import { prepareRoutedPrompt, type PrepareRoutedPromptInput } from "./pipeline.ts";
+import { resolvePiRouterModel } from "./pi-ai-client.ts";
 import { routePromptWithModel } from "./router-model.ts";
 import { createLocalRouterLifecycle, type LocalRouterLifecycle } from "./local-lifecycle.ts";
 import { createFileRouterStateStore, type RouterStateStore } from "./state.ts";
@@ -72,6 +73,22 @@ function refreshActiveRouterModel(config: RouterConfig): RouterConfig {
 	return { ...config, routerModel: resolveRouterModel(config) };
 }
 
+function effectiveRouterModelFromContext(config: RouterConfig, ctx: any): WorkModelInfo | null {
+	if (config.routerModel.provider !== "openai-codex") {
+		return { provider: config.routerModel.provider, model: config.routerModel.model };
+	}
+	if (!ctx?.modelRegistry) {
+		return { provider: config.routerModel.provider, model: config.routerModel.model };
+	}
+	const resolved = resolvePiRouterModel(config.routerModel, ctx.modelRegistry);
+	return resolved ? { provider: resolved.provider, model: resolved.id } : { provider: config.routerModel.provider, model: config.routerModel.model };
+}
+
+function remoteRouterModelLabel(config: RouterConfig, ctx: any): string {
+	const effectiveRouterModel = effectiveRouterModelFromContext(config, ctx);
+	return formatModel(effectiveRouterModel?.provider, effectiveRouterModel?.model);
+}
+
 export default function piRouterExtension(pi: ExtensionAPI) {
 	installPiRouter(pi, {});
 }
@@ -113,11 +130,12 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			return;
 		}
 		const result = await localLifecycle.stop(config.routerModels.local);
+		const remoteModel = remoteRouterModelLabel(config, ctx);
 		if (result.status === "error") {
-			ctx.ui.notify(`Pi router local mode disabled; using remote GPT-5.4 Nano router model; failed to stop local llama.cpp router model: ${result.message ?? "unknown error"}`, "warning");
+			ctx.ui.notify(`Pi router local mode disabled; using remote ${remoteModel} router model; failed to stop local llama.cpp router model: ${result.message ?? "unknown error"}`, "warning");
 			return;
 		}
-		ctx.ui.notify("Pi router local mode disabled; using remote GPT-5.4 Nano router model", "info");
+		ctx.ui.notify(`Pi router local mode disabled; using remote ${remoteModel} router model`, "info");
 	}
 
 	pi.registerCommand("router", {
@@ -146,7 +164,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 				ctx.ui.notify(`router local:${config.localMode} usage:/router local on|off`, "info");
 				return;
 			}
-			ctx.ui.notify(routerStatusSummary({ config }), "info");
+			ctx.ui.notify(routerStatusSummary({ config, effectiveRouterModel: effectiveRouterModelFromContext(config, ctx) }), "info");
 		},
 	});
 

@@ -62,4 +62,13 @@ describe("router configuration", () => {
 
 		assert.equal(summary, "router:on local:off routerModel:openai-codex/gpt-5.4-nano workModel:unknown");
 	});
+
+	it("shows the effective router model before the configured target when fallback resolves differently", () => {
+		const summary = routerStatusSummary({
+			config: { ...DEFAULT_ROUTER_CONFIG, state: "on", localMode: "off" },
+			effectiveRouterModel: { provider: "openai-codex", model: "gpt-5.4-mini" },
+		});
+
+		assert.equal(summary, "router:on local:off routerModel:openai-codex/gpt-5.4-mini routerTarget:openai-codex/gpt-5.4-nano workModel:unknown");
+	});
 });

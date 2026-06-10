@@ -601,7 +601,7 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(savedStates, [{ state: "off", localMode: "off" }]);
 		assert.deepEqual(stoppedModels, ["llama-cpp/gemma4"]);
 		assert.deepEqual(notifications, [
-			"Pi router local mode disabled; using remote GPT-5.4 Nano router model",
+			"Pi router local mode disabled; using remote openai-codex/gpt-5.4-nano router model",
 			"router:off local:off routerModel:openai-codex/gpt-5.4-nano workModel:unknown",
 		]);
 	});
