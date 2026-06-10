@@ -324,4 +324,75 @@ describe("local router model", () => {
 		assert.equal(unavailable.degradedReason, "router model unavailable: connection refused");
 		assert.equal(oversized.degradedReason, "input exceeds router maxInputChars: 12001 > 12000");
 	});
+
+	it("routes remote OpenAI Codex subscription models through Pi modelRegistry and complete", async () => {
+		let fetched = false;
+		let completedModel: any;
+		let completedContext: any;
+		let completedOptions: any;
+		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModels.remote;
+		const modelRegistry = {
+			find: (provider: string, model: string) => ({ provider, id: model, api: "openai-codex-responses", baseUrl: "https://chatgpt.com/backend-api" }) as any,
+			getApiKeyAndHeaders: async () => ({ ok: true as const, apiKey: "codex-oauth-token", headers: { "x-test": "header" } }),
+		};
+		const complete = async (model: any, context: any, options: any) => {
+			completedModel = model;
+			completedContext = context;
+			completedOptions = options;
+			return {
+				stopReason: "stop",
+				content: [{ type: "text", text: JSON.stringify({
+					sourceLanguage: "es",
+					translation: "Improve the router.",
+					thinkingLevel: "medium",
+					translateFinalAnswer: true,
+					usedConversationContext: false,
+					resolvedReferences: [],
+					unresolvedReferences: [],
+				}) }],
+			} as any;
+		};
+
+		const result = await routePromptWithModel(
+			"mejora el router",
+			remoteModel,
+			async () => { fetched = true; throw new Error("fetch should not be used"); },
+			{},
+			{ modelRegistry, complete: complete as any },
+		);
+
+		assert.equal(fetched, false);
+		assert.equal(completedModel.provider, "openai-codex");
+		assert.equal(completedModel.id, "gpt-5.4-nano");
+		assert.equal(completedOptions.apiKey, "codex-oauth-token");
+		assert.deepEqual(completedOptions.headers, { "x-test": "header" });
+		assert.match(completedContext.systemPrompt, /Return ONLY one JSON object/);
+		assert.match(completedContext.messages[0].content[0].text, /Actual input:/);
+		assert.equal(result.englishPrompt, "Improve the router.");
+	});
+
+	it("falls back from remote Nano to Mini when the OpenAI Codex catalog does not expose Nano", async () => {
+		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModels.remote;
+		let requestedModels: string[] = [];
+		let completedModel: any;
+		const modelRegistry = {
+			find: (provider: string, model: string) => {
+				requestedModels.push(`${provider}/${model}`);
+				return model === "gpt-5.4-mini" ? ({ provider, id: model, api: "openai-codex-responses" } as any) : undefined;
+			},
+			getApiKeyAndHeaders: async () => ({ ok: true as const, apiKey: "codex-oauth-token" }),
+		};
+		const complete = async (model: any) => {
+			completedModel = model;
+			return {
+				stopReason: "stop",
+				content: [{ type: "text", text: '{"translation":"Improve the router.","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' }],
+			} as any;
+		};
+
+		await routePromptWithModel("mejora el router", remoteModel, undefined as any, {}, { modelRegistry, complete: complete as any });
+
+		assert.deepEqual(requestedModels, ["openai-codex/gpt-5.4-nano", "openai-codex/gpt-5.4-mini"]);
+		assert.equal(completedModel.id, "gpt-5.4-mini");
+	});
 });

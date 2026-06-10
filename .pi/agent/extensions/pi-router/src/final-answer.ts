@@ -1,4 +1,5 @@
 import type { RouterModelConfig } from "./config.ts";
+import { assistantText, completeWithPiRouterModel, shouldUsePiAi, userMessage, type PiAiRuntime } from "./pi-ai-client.ts";
 import { maskProtectedSpans } from "./protected-text.ts";
 
 export interface FinalAnswerTranslationResult {
@@ -45,6 +46,7 @@ export async function translateFinalAnswerToSpanish(
 	englishAnswer: string,
 	config: RouterModelConfig,
 	fetchLike: FetchLike = fetch as FetchLike,
+	runtime: PiAiRuntime = {},
 ): Promise<FinalAnswerTranslationResult> {
 	const protectedAnswer = maskProtectedSpans(englishAnswer);
 	const shouldPreserveFencedBlocksWithContext = /```[\s\S]*?```/.test(protectedAnswer.text);
@@ -66,7 +68,7 @@ export async function translateFinalAnswerToSpanish(
 				continue;
 			}
 			chunkNumber += 1;
-			const translated = await translateFinalAnswerSegment(segment.text, config, fetchLike);
+			const translated = await translateFinalAnswerSegment(segment.text, config, fetchLike, runtime);
 			if (translated.degradedReason) {
 				fallbackEvents.push(translatableChunkCount > 1 ? `chunk ${chunkNumber}: ${translated.degradedReason}` : translated.degradedReason);
 				translatedSegments.push(segment.text);
@@ -90,8 +92,9 @@ async function translateFinalAnswerSegment(
 	segment: string,
 	config: RouterModelConfig,
 	fetchLike: FetchLike,
+	runtime: PiAiRuntime,
 ): Promise<FinalAnswerTranslationResult> {
-	const translated = await translateFinalAnswerChunk(segment, config, fetchLike);
+	const translated = await translateFinalAnswerChunk(segment, config, fetchLike, runtime);
 	if (!translated.degradedReason || segment.length <= FINAL_ANSWER_RETRY_CHUNK_MAX_CHARS) {
 		return translated;
 	}
@@ -108,7 +111,7 @@ async function translateFinalAnswerSegment(
 			continue;
 		}
 		retryNumber += 1;
-		const retried = await translateFinalAnswerChunk(retryChunk, config, fetchLike);
+		const retried = await translateFinalAnswerChunk(retryChunk, config, fetchLike, runtime);
 		if (retried.degradedReason) {
 			fallbackEvents.push(`retry chunk ${retryNumber}: ${retried.degradedReason}`);
 			retriedSegments.push(retryChunk);
@@ -128,10 +131,24 @@ async function translateFinalAnswerChunk(
 	chunk: string,
 	config: RouterModelConfig,
 	fetchLike: FetchLike,
+	runtime: PiAiRuntime,
 ): Promise<FinalAnswerTranslationResult> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 	try {
+		if (shouldUsePiAi(config)) {
+			const response = await completeWithPiRouterModel(
+				config,
+				{ messages: [userMessage(buildFinalAnswerMessages(chunk)[0].content)] },
+				runtime,
+			);
+			const content = assistantText(response);
+			if (!content.trim()) {
+				return fallback(chunk, "final answer translation unavailable: empty response");
+			}
+			return finalizeTranslatedChunk(chunk, content);
+		}
+
 		const response = await fetchLike(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -152,26 +169,30 @@ async function translateFinalAnswerChunk(
 		if (typeof content !== "string" || !content.trim()) {
 			return fallback(chunk, "final answer translation unavailable: empty response");
 		}
-		const cleanedAnswer = cleanTranslatedAnswer(content);
-		const spanishAnswer = extractEchoedTranslationPayload(cleanedAnswer) ?? cleanedAnswer;
-		if (!spanishAnswer) {
-			return fallback(chunk, "final answer translation unavailable: empty response after cleanup");
-		}
-		if (/<\/?TEXT>/i.test(spanishAnswer)) {
-			return fallback(chunk, "final answer translation unavailable: echoed text payload");
-		}
-		if (spanishAnswer.includes(FINAL_ANSWER_TEXT_BEGIN) || spanishAnswer.includes(FINAL_ANSWER_TEXT_END)) {
-			return fallback(chunk, "final answer translation unavailable: echoed translation delimiter");
-		}
-		if (spanishAnswer.trim() === chunk.trim()) {
-			return fallback(chunk, "final answer translation unavailable: untranslated output");
-		}
-		return { englishAnswer: chunk, spanishAnswer };
+		return finalizeTranslatedChunk(chunk, content);
 	} catch (error) {
 		return fallback(chunk, `final answer translation unavailable: ${errorMessage(error)}`);
 	} finally {
 		clearTimeout(timeout);
 	}
+}
+
+function finalizeTranslatedChunk(chunk: string, content: string): FinalAnswerTranslationResult {
+	const cleanedAnswer = cleanTranslatedAnswer(content);
+	const spanishAnswer = extractEchoedTranslationPayload(cleanedAnswer) ?? cleanedAnswer;
+	if (!spanishAnswer) {
+		return fallback(chunk, "final answer translation unavailable: empty response after cleanup");
+	}
+	if (/<\/?TEXT>/i.test(spanishAnswer)) {
+		return fallback(chunk, "final answer translation unavailable: echoed text payload");
+	}
+	if (spanishAnswer.includes(FINAL_ANSWER_TEXT_BEGIN) || spanishAnswer.includes(FINAL_ANSWER_TEXT_END)) {
+		return fallback(chunk, "final answer translation unavailable: echoed translation delimiter");
+	}
+	if (spanishAnswer.trim() === chunk.trim()) {
+		return fallback(chunk, "final answer translation unavailable: untranslated output");
+	}
+	return { englishAnswer: chunk, spanishAnswer };
 }
 
 function splitFinalAnswerSegments(text: string): FinalAnswerSegment[] {

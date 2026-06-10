@@ -556,4 +556,36 @@ describe("final answer translation", () => {
 		assert.equal(result.englishAnswer, "Done.");
 		assert.equal(result.degradedReason, "final answer translation unavailable: timeout");
 	});
+
+	it("translates remote final answers through OpenAI Codex subscription auth", async () => {
+		let fetched = false;
+		let completedModel: any;
+		let completedContext: any;
+		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModels.remote;
+		const modelRegistry = {
+			find: (provider: string, model: string) => ({ provider, id: model, api: "openai-codex-responses" }) as any,
+			getApiKeyAndHeaders: async () => ({ ok: true as const, apiKey: "codex-oauth-token" }),
+		};
+		const complete = async (model: any, context: any) => {
+			completedModel = model;
+			completedContext = context;
+			return {
+				stopReason: "stop",
+				content: [{ type: "text", text: "Listo. Los cambios están aplicados." }],
+			} as any;
+		};
+
+		const result = await translateFinalAnswerToSpanish(
+			"Done. The changes are applied.",
+			remoteModel,
+			async () => { fetched = true; throw new Error("fetch should not be used"); },
+			{ modelRegistry, complete: complete as any },
+		);
+
+		assert.equal(fetched, false);
+		assert.equal(completedModel.provider, "openai-codex");
+		assert.equal(completedModel.id, "gpt-5.4-nano");
+		assert.match(completedContext.messages[0].content[0].text, /BEGIN_PI_ROUTER_TRANSLATION_TEXT/);
+		assert.equal(result.spanishAnswer, "Listo. Los cambios están aplicados.");
+	});
 });

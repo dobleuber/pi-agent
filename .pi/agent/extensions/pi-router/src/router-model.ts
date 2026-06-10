@@ -1,4 +1,5 @@
 import type { RouterModelConfig } from "./config.ts";
+import { assistantText, completeWithPiRouterModel, shouldUsePiAi, userMessage, type PiAiRuntime } from "./pi-ai-client.ts";
 import { maskProtectedSpans } from "./protected-text.ts";
 
 export type ThinkingLevel = "low" | "medium" | "high";
@@ -93,6 +94,7 @@ export async function routePromptWithModel(
 	config: RouterModelConfig,
 	fetchLike: FetchLike = fetch as FetchLike,
 	context: RouterContextOptions = {},
+	runtime: PiAiRuntime = {},
 ): Promise<RouterModelResult> {
 	if (prompt.length > config.maxInputChars) {
 		return passthrough(prompt, `input exceeds router maxInputChars: ${prompt.length} > ${config.maxInputChars}`);
@@ -104,6 +106,19 @@ export async function routePromptWithModel(
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 	try {
+		if (shouldUsePiAi(config)) {
+			const response = await completeWithPiRouterModel(
+				config,
+				buildRouterPiAiContext(protectedPrompt.text, context),
+				runtime,
+			);
+			const content = assistantText(response);
+			if (content.trim().length === 0) {
+				return passthrough(prompt, "router model returned no content");
+			}
+			return normalizeRouterPayload(parseRouterJsonObject(content), prompt, restorePreservedPrompt);
+		}
+
 		const response = await fetchLike(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -134,16 +149,36 @@ export async function routePromptWithModel(
 }
 
 function buildRouterMessages(prompt: string, context: RouterContextOptions): Array<{ role: "system" | "user" | "assistant"; content: string }> {
-	const input: { task: string; conversationContext?: string } = { task: prompt };
-	if (context.conversationSummary?.trim()) {
-		input.conversationContext = context.conversationSummary.trim();
-	}
+	const input = buildRouterInput(prompt, context);
 	return [
 		{ role: "system", content: ROUTER_SYSTEM_PROMPT },
 		{ role: "user", content: JSON.stringify(ROUTER_EXAMPLE_INPUT) },
 		{ role: "assistant", content: JSON.stringify(ROUTER_EXAMPLE_OUTPUT) },
 		{ role: "user", content: JSON.stringify(input) },
 	];
+}
+
+function buildRouterPiAiContext(prompt: string, context: RouterContextOptions) {
+	const input = buildRouterInput(prompt, context);
+	return {
+		systemPrompt: ROUTER_SYSTEM_PROMPT,
+		messages: [userMessage([
+			"Example input:",
+			JSON.stringify(ROUTER_EXAMPLE_INPUT),
+			"Example JSON output:",
+			JSON.stringify(ROUTER_EXAMPLE_OUTPUT),
+			"Actual input:",
+			JSON.stringify(input),
+		].join("\n"))],
+	};
+}
+
+function buildRouterInput(prompt: string, context: RouterContextOptions): { task: string; conversationContext?: string } {
+	const input: { task: string; conversationContext?: string } = { task: prompt };
+	if (context.conversationSummary?.trim()) {
+		input.conversationContext = context.conversationSummary.trim();
+	}
+	return input;
 }
 
 function maskFencedCodeBlocks(text: string): PreservedBlockMask {

@@ -26,5 +26,7 @@
 - [x] 4.1 Update prompt routing to pass the active router model resolved from local mode.
 - [x] 4.2 Update final-answer translation to pass the active router model resolved from local mode.
 - [x] 4.3 Add tests proving prompt routing and final-answer translation use the selected local or remote profile.
-- [x] 4.4 Run the pi-router test suite with `cd .pi/agent/extensions/pi-router && npm test`.
-- [x] 4.5 Run OpenSpec validation/status checks for `add-router-local-model-toggle` and confirm all artifacts are complete.
+- [x] 4.4 Route remote `openai-codex` models through Pi's `ctx.modelRegistry`/`complete()` path instead of raw OpenRouter or OpenAI API-key fetches.
+- [x] 4.5 Add tests for OpenAI Codex subscription routing and Codex Nano-to-Mini registry fallback.
+- [x] 4.6 Run the pi-router test suite with `cd .pi/agent/extensions/pi-router && npm test`.
+- [x] 4.7 Run OpenSpec validation/status checks for `add-router-local-model-toggle` and confirm all artifacts are complete.

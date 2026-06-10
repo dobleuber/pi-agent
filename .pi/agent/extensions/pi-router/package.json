@@ -8,12 +8,16 @@
     "test": "tsx --test tests/*.test.ts"
   },
   "pi": {
-    "extensions": ["./src/index.ts"]
+    "extensions": [
+      "./src/index.ts"
+    ]
   },
   "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
     "@earendil-works/pi-coding-agent": "*"
   },
   "devDependencies": {
+    "@earendil-works/pi-ai": "*",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0"
   }

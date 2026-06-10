@@ -9,6 +9,7 @@ export interface RouterModelConfig {
 	timeoutMs: number;
 	fallbackMode: RouterFallbackMode;
 	maxInputChars: number;
+	fallbackModels?: string[];
 }
 
 export interface RouterModelProfiles {
@@ -55,12 +56,13 @@ const LOCAL_ROUTER_MODEL: RouterModelConfig = {
 };
 
 const REMOTE_ROUTER_MODEL: RouterModelConfig = {
-	provider: "openrouter",
-	model: "openai/gpt-5.4-nano",
-	baseUrl: "https://openrouter.ai/api/v1",
+	provider: "openai-codex",
+	model: "gpt-5.4-nano",
+	baseUrl: "https://chatgpt.com/backend-api",
 	timeoutMs: 15000,
 	fallbackMode: "passthrough-with-warning",
 	maxInputChars: 12000,
+	fallbackModels: ["gpt-5.4-mini"],
 };
 
 export const DEFAULT_ROUTER_CONFIG: RouterConfig = {

@@ -4,6 +4,7 @@ import { extendRouterDetailsAfterCompletion, type RouterDetailsEntry } from "./d
 import { translateFinalAnswerToSpanish, type FinalAnswerTranslationResult } from "./final-answer.ts";
 import { shouldRouteInput } from "./input.ts";
 import { prepareRoutedPrompt, type PrepareRoutedPromptInput } from "./pipeline.ts";
+import { routePromptWithModel } from "./router-model.ts";
 import { createLocalRouterLifecycle, type LocalRouterLifecycle } from "./local-lifecycle.ts";
 import { createFileRouterStateStore, type RouterStateStore } from "./state.ts";
 import { selectedWorkModelFromPiContext } from "./work-model.ts";
@@ -11,7 +12,7 @@ import { selectedWorkModelFromPiContext } from "./work-model.ts";
 export interface PiRouterDependencies {
 	config?: RouterConfig;
 	routePrompt?: PrepareRoutedPromptInput["routePrompt"];
-	translateFinalAnswer?: (answer: string, config: RouterConfig["routerModel"]) => Promise<FinalAnswerTranslationResult>;
+	translateFinalAnswer?: (answer: string, config: RouterConfig["routerModel"], ctx?: any) => Promise<FinalAnswerTranslationResult>;
 	stateStore?: RouterStateStore;
 	localLifecycle?: LocalRouterLifecycle;
 }
@@ -183,8 +184,8 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			return;
 		}
 		const translate = dependencies.translateFinalAnswer
-			?? ((answer: string, routerModel: RouterConfig["routerModel"]) => translateFinalAnswerToSpanish(answer, routerModel));
-		const translated = await translate(englishAnswer, config.routerModel);
+			?? ((answer: string, routerModel: RouterConfig["routerModel"], context: any) => translateFinalAnswerToSpanish(answer, routerModel, fetch as any, { modelRegistry: context?.modelRegistry }));
+		const translated = await translate(englishAnswer, config.routerModel, ctx);
 		const completedDetails = extendRouterDetailsAfterCompletion(detailsForTurn, {
 			englishAnswer: translated.englishAnswer,
 			spanishAnswer: translated.spanishAnswer,
@@ -221,7 +222,8 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			prompt: event.text,
 			config,
 			workModel: selectedWorkModelFromPiContext(ctx),
-			routePrompt: dependencies.routePrompt,
+			routePrompt: dependencies.routePrompt
+				?? ((prompt, routerModel, context) => routePromptWithModel(prompt, routerModel, fetch as any, context, { modelRegistry: ctx.modelRegistry })),
 		});
 
 		if (prepared.action === "continue") {

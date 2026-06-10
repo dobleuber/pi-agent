@@ -21,11 +21,12 @@ describe("router configuration", () => {
 		assert.deepEqual(resolveRouterModel(DEFAULT_ROUTER_CONFIG), DEFAULT_ROUTER_CONFIG.routerModels.local);
 	});
 
-	it("defines a remote GPT-5.4 Nano router profile", () => {
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.remote.provider, "openrouter");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.remote.model, "openai/gpt-5.4-nano");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.remote.baseUrl, "https://openrouter.ai/api/v1");
-		assert.equal(resolveRouterModel({ ...DEFAULT_ROUTER_CONFIG, localMode: "off" }).model, "openai/gpt-5.4-nano");
+	it("defines a remote GPT-5.4 Nano router profile through OpenAI Codex subscription auth", () => {
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.remote.provider, "openai-codex");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.remote.model, "gpt-5.4-nano");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.remote.baseUrl, "https://chatgpt.com/backend-api");
+		assert.deepEqual(DEFAULT_ROUTER_CONFIG.routerModels.remote.fallbackModels, ["gpt-5.4-mini"]);
+		assert.equal(resolveRouterModel({ ...DEFAULT_ROUTER_CONFIG, localMode: "off" }).model, "gpt-5.4-nano");
 	});
 
 	it("resolves global, session, and single-prompt overrides", () => {
@@ -59,6 +60,6 @@ describe("router configuration", () => {
 			config: { ...DEFAULT_ROUTER_CONFIG, state: "on", localMode: "off" },
 		});
 
-		assert.equal(summary, "router:on local:off routerModel:openrouter/openai/gpt-5.4-nano workModel:unknown");
+		assert.equal(summary, "router:on local:off routerModel:openai-codex/gpt-5.4-nano workModel:unknown");
 	});
 });

@@ -31,11 +31,11 @@ The router SHALL support `/router local on` to select the local `llama-cpp/gemma
 - **THEN** the router MUST keep local mode selected and notify the user that the local server could not be started
 
 ### Requirement: Local mode off selects remote routing and stops the local model server
-The router SHALL support `/router local off` to select the remote `openrouter/openai/gpt-5.4-nano` router model and stop the local llama.cpp server for the configured local router model.
+The router SHALL support `/router local off` to select the remote `openai-codex/gpt-5.4-nano` router model and stop the local llama.cpp server for the configured local router model.
 
 #### Scenario: Switching to remote mode
 - **WHEN** the user runs `/router local off`
-- **THEN** the router MUST select `openrouter/openai/gpt-5.4-nano` as the active router model
+- **THEN** the router MUST select `openai-codex/gpt-5.4-nano` as the active router model
 
 #### Scenario: Stopping local server
 - **WHEN** the user runs `/router local off`
@@ -54,7 +54,11 @@ Prompt routing and final-answer translation SHALL use the router model profile s
 
 #### Scenario: Routing while local mode is off
 - **WHEN** routing is enabled and local mode is off
-- **THEN** prompt routing and final-answer translation MUST use `openrouter/openai/gpt-5.4-nano` at `https://openrouter.ai/api/v1`
+- **THEN** prompt routing and final-answer translation MUST use `openai-codex/gpt-5.4-nano` at `https://chatgpt.com/backend-api`
+
+#### Scenario: Codex Nano is not exposed by the installed catalog yet
+- **WHEN** routing is enabled, local mode is off, and `ctx.modelRegistry` does not find `openai-codex/gpt-5.4-nano`
+- **THEN** prompt routing and final-answer translation MUST try the configured Codex fallback model without using OpenRouter or direct OpenAI API-key calls
 
 ### Requirement: Local mode is persisted
 The router SHALL persist local mode so the selected router model profile survives new Pi sessions.

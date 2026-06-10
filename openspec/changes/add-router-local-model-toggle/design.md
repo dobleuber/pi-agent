@@ -21,7 +21,7 @@ The user wants `/router on|off` to keep meaning only “enable or disable routin
 **Non-Goals:**
 
 - Do not change the work model selected for normal coding responses.
-- Do not introduce automatic quality fallback from GPT-5.4 Nano to Mini.
+- Do not change the work model selected for normal coding responses when the router switches between local and remote modes.
 - Do not create a generic multi-model router profile UI beyond the requested local on/off toggle.
 - Do not change the router prompt, JSON parsing, or translation policy.
 
@@ -37,7 +37,7 @@ Alternative considered: make `/router off` imply remote mode. This was rejected 
 
 Extend router configuration to hold named local and remote profiles, then derive the active `routerModel` from local mode. A small helper such as `resolveRouterModel(config)` can keep call sites simple and avoid duplicating conditional logic.
 
-The local profile is `llama-cpp/gemma4` at `http://127.0.0.1:11434/v1`. The remote profile is `openrouter/openai/gpt-5.4-nano` at `https://openrouter.ai/api/v1`.
+The local profile is `llama-cpp/gemma4` at `http://127.0.0.1:11434/v1`. The remote profile is `openai-codex/gpt-5.4-nano` at `https://chatgpt.com/backend-api`.
 
 Alternative considered: mutate and persist a full `routerModel` object each time the user toggles. This was rejected because local mode is the user-level state; profiles should remain declarative defaults that tests can validate.
 
@@ -67,17 +67,19 @@ Alternative considered: only stop processes started by this extension. This was 
 
 ### Decision: Use GPT-5.4 Nano as the remote router model
 
-Use `openrouter/openai/gpt-5.4-nano` for remote mode. The router task is translation, language classification, thinking-level selection, and small JSON output. Nano is sufficient for this expected workload and is cheaper than Mini in the available model catalog.
+Use `openai-codex/gpt-5.4-nano` for remote mode so the router uses the user's ChatGPT/OpenAI Codex subscription rather than OpenRouter or a direct OpenAI API key. The router task is translation, language classification, thinking-level selection, and small JSON output. Nano is sufficient for this expected workload.
 
-Alternative considered: use `openrouter/openai/gpt-5.4-mini`. This remains a future option if Nano quality proves insufficient, but it is not part of this change.
+The installed Pi catalog currently exposes `openai-codex/gpt-5.4-mini` but may not expose `openai-codex/gpt-5.4-nano` yet. Keep Nano as the configured target and allow an operational fallback to `gpt-5.4-mini` when Nano is not present in `ctx.modelRegistry`, so remote mode keeps working until the Codex catalog includes Nano.
+
+Alternative considered: use `openai/gpt-5.4-nano` at `api.openai.com`. This was rejected because it requires an OpenAI API key instead of the user's normal ChatGPT subscription.
 
 ## Risks / Trade-offs
 
 - Local server startup may take longer than the command handler should block → Start the wrapper and notify the user; routing fallback behavior still handles temporary unavailability.
 - Port-based stop may fail if platform tools are unavailable → Keep remote mode selected and show a warning so routing does not continue to depend on llama.cpp.
 - Existing persisted state may have the old shape → Read old state defensively and default local mode to `on` when absent.
-- Remote mode depends on OpenRouter authentication and availability → Preserve existing passthrough-with-warning behavior when selected remote routing is unavailable.
-- GPT-5.4 Nano may produce lower-quality translations than Mini for complex prompts → Keep the model profile centralized so changing to Mini later is a small config-only adjustment.
+- Remote mode depends on OpenAI Codex authentication and availability → Preserve existing passthrough-with-warning behavior when selected remote routing is unavailable.
+- The installed OpenAI Codex model catalog may not expose GPT-5.4 Nano yet → Keep Nano as the configured target and fall back to Codex Mini only when Nano is absent from the registry.
 
 ## Migration Plan
 

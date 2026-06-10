@@ -166,7 +166,7 @@ describe("pi-router extension entrypoint", () => {
 
 		installPiRouter(pi as any, {
 			routePrompt: async () => ({
-				englishPrompt: "Do we have an OpenRouter smoke script?",
+				englishPrompt: "Do we have an OpenAI Codex smoke script?",
 				sourceLanguage: "es",
 				thinkingLevel: "medium",
 				translateFinalAnswer: true,
@@ -177,7 +177,7 @@ describe("pi-router extension entrypoint", () => {
 			},
 		});
 		await commands.get("router")!.handler("on", ctx);
-		await handlers.get("input")![0]({ text: "Tenemos un script smoke de OpenRouter?", source: "interactive" }, ctx);
+		await handlers.get("input")![0]({ text: "Tenemos un script smoke de OpenAI Codex?", source: "interactive" }, ctx);
 
 		const toolCallResult = await handlers.get("message_end")![0]({
 			message: { role: "assistant", content: [{ type: "toolCall", name: "bash", arguments: {} }] },
@@ -602,7 +602,7 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(stoppedModels, ["llama-cpp/gemma4"]);
 		assert.deepEqual(notifications, [
 			"Pi router local mode disabled; using remote GPT-5.4 Nano router model",
-			"router:off local:off routerModel:openrouter/openai/gpt-5.4-nano workModel:unknown",
+			"router:off local:off routerModel:openai-codex/gpt-5.4-nano workModel:unknown",
 		]);
 	});
 
@@ -710,7 +710,7 @@ describe("pi-router extension entrypoint", () => {
 
 		await handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
 
-		assert.deepEqual(routedModels, ["openrouter/openai/gpt-5.4-nano"]);
+		assert.deepEqual(routedModels, ["openai-codex/gpt-5.4-nano"]);
 	});
 
 	it("translates final answers with the active remote router model when local mode is off", async () => {
@@ -743,7 +743,7 @@ describe("pi-router extension entrypoint", () => {
 
 		await handlers.get("message_end")![0]({ message: { role: "assistant", content: [{ type: "text", text: "Done." }] } }, ctx);
 
-		assert.deepEqual(translatedModels, ["openrouter/openai/gpt-5.4-nano"]);
+		assert.deepEqual(translatedModels, ["openai-codex/gpt-5.4-nano"]);
 	});
 
 	it("can turn routing on and transform normal input while keeping commands untouched", async () => {
