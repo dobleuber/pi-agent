@@ -2,20 +2,30 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
 	DEFAULT_ROUTER_CONFIG,
+	resolveRouterModel,
 	resolveRouterState,
 	routerStatusSummary,
 	type WorkModelInfo,
 } from "../src/config.ts";
 
 describe("router configuration", () => {
-	it("defaults to disabled routing with local gemma4 as the router model", () => {
+	it("defaults to disabled routing with local gemma4 as the active router model", () => {
 		assert.equal(DEFAULT_ROUTER_CONFIG.state, "off");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.provider, "llama-cpp");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.model, "gemma4");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.baseUrl, "http://127.0.0.1:11434/v1");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.timeoutMs, 15000);
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.fallbackMode, "passthrough-with-warning");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.maxInputChars, 12000);
+		assert.equal(DEFAULT_ROUTER_CONFIG.localMode, "on");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.local.provider, "llama-cpp");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.local.model, "gemma4");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.local.baseUrl, "http://127.0.0.1:11434/v1");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.local.timeoutMs, 15000);
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.local.fallbackMode, "passthrough-with-warning");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.local.maxInputChars, 12000);
+		assert.deepEqual(resolveRouterModel(DEFAULT_ROUTER_CONFIG), DEFAULT_ROUTER_CONFIG.routerModels.local);
+	});
+
+	it("defines a remote GPT-5.4 Nano router profile", () => {
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.remote.provider, "openrouter");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.remote.model, "openai/gpt-5.4-nano");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModels.remote.baseUrl, "https://openrouter.ai/api/v1");
+		assert.equal(resolveRouterModel({ ...DEFAULT_ROUTER_CONFIG, localMode: "off" }).model, "openai/gpt-5.4-nano");
 	});
 
 	it("resolves global, session, and single-prompt overrides", () => {
@@ -41,6 +51,14 @@ describe("router configuration", () => {
 			degradedReason: "router timeout",
 		});
 
-		assert.equal(summary, "router:on routerModel:llama-cpp/gemma4 workModel:stratus/stratus-code degraded:router timeout");
+		assert.equal(summary, "router:on local:on routerModel:llama-cpp/gemma4 workModel:stratus/stratus-code degraded:router timeout");
+	});
+
+	it("builds status summary with remote router model when local mode is off", () => {
+		const summary = routerStatusSummary({
+			config: { ...DEFAULT_ROUTER_CONFIG, state: "on", localMode: "off" },
+		});
+
+		assert.equal(summary, "router:on local:off routerModel:openrouter/openai/gpt-5.4-nano workModel:unknown");
 	});
 });

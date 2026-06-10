@@ -43,7 +43,7 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(inputResult, { action: "continue" });
 		assert.deepEqual(statuses, [["pi-router", "router:off"]]);
 		assert.deepEqual(notifications, [
-			"router:off routerModel:llama-cpp/gemma4 workModel:unknown",
+			"router:off local:on routerModel:llama-cpp/gemma4 workModel:unknown",
 		]);
 	});
 
@@ -542,7 +542,7 @@ describe("pi-router extension entrypoint", () => {
 	it("persists router state changes and restores them in new sessions", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
-		const savedStates: string[] = [];
+		const savedStates: any[] = [];
 		const statuses: Array<[string, string | undefined]> = [];
 		const notifications: string[] = [];
 		const pi = {
@@ -568,8 +568,182 @@ describe("pi-router extension entrypoint", () => {
 		await commands.get("router")!.handler("on", ctx);
 
 		assert.deepEqual(statuses[0], ["pi-router", "router:on"]);
-		assert.deepEqual(savedStates, ["off", "on"]);
+		assert.deepEqual(savedStates, [
+			{ state: "off", localMode: "on" },
+			{ state: "on", localMode: "on" },
+		]);
 		assert.deepEqual(notifications, ["Pi router disabled", "Pi router enabled"]);
+	});
+
+	it("switches local mode off, persists it, selects remote routing, and stops local llama.cpp", async () => {
+		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
+		const savedStates: any[] = [];
+		const stoppedModels: string[] = [];
+		const notifications: string[] = [];
+		const pi = {
+			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
+			on(event: string, handler: (event: any, ctx: any) => Promise<void> | void) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
+		};
+		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
+
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => undefined, saveState: (state) => savedStates.push(state) },
+			localLifecycle: {
+				ensureRunning: async () => ({ status: "already-running" }),
+				stop: async (model) => { stoppedModels.push(`${model.provider}/${model.model}`); return { status: "stopped" }; },
+			},
+		});
+
+		await commands.get("router")!.handler("local off", ctx);
+		await commands.get("router")!.handler("", ctx);
+
+		assert.deepEqual(savedStates, [{ state: "off", localMode: "off" }]);
+		assert.deepEqual(stoppedModels, ["llama-cpp/gemma4"]);
+		assert.deepEqual(notifications, [
+			"Pi router local mode disabled; using remote GPT-5.4 Nano router model",
+			"router:off local:off routerModel:openrouter/openai/gpt-5.4-nano workModel:unknown",
+		]);
+	});
+
+	it("switches local mode on, persists it, selects local routing, and starts llama.cpp when down", async () => {
+		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+		const savedStates: any[] = [];
+		const ensuredModels: string[] = [];
+		const notifications: string[] = [];
+		const pi = {
+			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
+			on() {},
+		};
+		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
+
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => ({ localMode: "off" }), saveState: (state) => savedStates.push(state) },
+			localLifecycle: {
+				ensureRunning: async (model) => { ensuredModels.push(`${model.provider}/${model.model}`); return { status: "started" }; },
+				stop: async () => ({ status: "stopped" }),
+			},
+		});
+
+		await commands.get("router")!.handler("local on", ctx);
+		await commands.get("router")!.handler("", ctx);
+
+		assert.deepEqual(savedStates, [{ state: "off", localMode: "on" }]);
+		assert.deepEqual(ensuredModels, ["llama-cpp/gemma4"]);
+		assert.deepEqual(notifications, [
+			"Pi router local mode enabled; started local llama.cpp router model",
+			"router:off local:on routerModel:llama-cpp/gemma4 workModel:unknown",
+		]);
+	});
+
+	it("shows local command usage without changing state for missing or unknown actions", async () => {
+		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+		const savedStates: any[] = [];
+		const notifications: string[] = [];
+		const pi = {
+			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
+			on() {},
+		};
+		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
+
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => undefined, saveState: (state) => savedStates.push(state) },
+		});
+
+		await commands.get("router")!.handler("local", ctx);
+		await commands.get("router")!.handler("local maybe", ctx);
+
+		assert.deepEqual(savedStates, []);
+		assert.deepEqual(notifications, [
+			"router local:on usage:/router local on|off",
+			"router local:on usage:/router local on|off",
+		]);
+	});
+
+	it("keeps local mode unchanged when toggling router on and off", async () => {
+		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+		const savedStates: any[] = [];
+		const pi = {
+			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
+			on() {},
+		};
+		const ctx = { ui: { notify() {}, setStatus() {} } };
+
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => ({ localMode: "off" }), saveState: (state) => savedStates.push(state) },
+		});
+
+		await commands.get("router")!.handler("on", ctx);
+		await commands.get("router")!.handler("off", ctx);
+
+		assert.deepEqual(savedStates, [
+			{ state: "on", localMode: "off" },
+			{ state: "off", localMode: "off" },
+		]);
+	});
+
+	it("routes prompts with the active remote router model when local mode is off", async () => {
+		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const routedModels: string[] = [];
+		const pi = {
+			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
+			setThinkingLevel() {},
+			appendEntry() {},
+		};
+		const ctx = { ui: { notify() {}, setStatus() {} } };
+
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => ({ localMode: "off" }), saveState() {} },
+			routePrompt: async (_prompt, routerModel) => {
+				routedModels.push(`${routerModel.provider}/${routerModel.model}`);
+				return {
+					englishPrompt: "Improve the router.",
+					sourceLanguage: "es",
+					thinkingLevel: "medium",
+					translateFinalAnswer: false,
+				};
+			},
+		});
+		await commands.get("router")!.handler("on", ctx);
+
+		await handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
+
+		assert.deepEqual(routedModels, ["openrouter/openai/gpt-5.4-nano"]);
+	});
+
+	it("translates final answers with the active remote router model when local mode is off", async () => {
+		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const translatedModels: string[] = [];
+		const pi = {
+			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
+			setThinkingLevel() {},
+			appendEntry() {},
+		};
+		const ctx = { ui: { notify() {}, setStatus() {} } };
+
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => ({ localMode: "off" }), saveState() {} },
+			routePrompt: async () => ({
+				englishPrompt: "Improve the router.",
+				sourceLanguage: "es",
+				thinkingLevel: "medium",
+				translateFinalAnswer: true,
+			}),
+			translateFinalAnswer: async (answer, routerModel) => {
+				translatedModels.push(`${routerModel.provider}/${routerModel.model}`);
+				return { englishAnswer: answer, spanishAnswer: "Listo." };
+			},
+		});
+		await commands.get("router")!.handler("on", ctx);
+		await handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
+
+		await handlers.get("message_end")![0]({ message: { role: "assistant", content: [{ type: "text", text: "Done." }] } }, ctx);
+
+		assert.deepEqual(translatedModels, ["openrouter/openai/gpt-5.4-nano"]);
 	});
 
 	it("can turn routing on and transform normal input while keeping commands untouched", async () => {
