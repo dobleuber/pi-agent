@@ -9,7 +9,6 @@ export interface RouterModelConfig {
 	timeoutMs: number;
 	fallbackMode: RouterFallbackMode;
 	maxInputChars: number;
-	fallbackModels?: string[];
 }
 
 export interface RouterModelProfiles {
@@ -58,12 +57,11 @@ const LOCAL_ROUTER_MODEL: RouterModelConfig = {
 
 const REMOTE_ROUTER_MODEL: RouterModelConfig = {
 	provider: "openai-codex",
-	model: "gpt-5.4-nano",
+	model: "gpt-5.4-mini",
 	baseUrl: "https://chatgpt.com/backend-api",
 	timeoutMs: 15000,
 	fallbackMode: "passthrough-with-warning",
 	maxInputChars: 12000,
-	fallbackModels: ["gpt-5.4-mini"],
 };
 
 export const DEFAULT_ROUTER_CONFIG: RouterConfig = {
@@ -95,16 +93,11 @@ export function resolveRouterState(
 
 export function routerStatusSummary(input: RouterStatusInput): string {
 	const activeRouterModel = resolveRouterModel(input.config);
-	const routerTarget = formatModel(activeRouterModel.provider, activeRouterModel.model);
 	const routerModel = input.effectiveRouterModel
 		? formatModel(input.effectiveRouterModel.provider, input.effectiveRouterModel.model)
-		: routerTarget;
+		: formatModel(activeRouterModel.provider, activeRouterModel.model);
 	const workModel = formatModel(input.workModel?.provider, input.workModel?.model);
-	const parts = [`router:${input.config.state}`, `local:${input.config.localMode}`, `routerModel:${routerModel}`];
-	if (routerModel !== routerTarget) {
-		parts.push(`routerTarget:${routerTarget}`);
-	}
-	parts.push(`workModel:${workModel}`);
+	const parts = [`router:${input.config.state}`, `local:${input.config.localMode}`, `routerModel:${routerModel}`, `workModel:${workModel}`];
 	if (input.degradedReason) {
 		parts.push(`degraded:${input.degradedReason}`);
 	}

@@ -37,7 +37,7 @@ Alternative considered: make `/router off` imply remote mode. This was rejected 
 
 Extend router configuration to hold named local and remote profiles, then derive the active `routerModel` from local mode. A small helper such as `resolveRouterModel(config)` can keep call sites simple and avoid duplicating conditional logic.
 
-The local profile is `llama-cpp/gemma4` at `http://127.0.0.1:11434/v1`. The remote profile is `openai-codex/gpt-5.4-nano` at `https://chatgpt.com/backend-api`.
+The local profile is `llama-cpp/gemma4` at `http://127.0.0.1:11434/v1`. The remote profile is `openai-codex/gpt-5.4-mini` at `https://chatgpt.com/backend-api`.
 
 Alternative considered: mutate and persist a full `routerModel` object each time the user toggles. This was rejected because local mode is the user-level state; profiles should remain declarative defaults that tests can validate.
 
@@ -65,13 +65,11 @@ When switching local mode off, stop the process serving the configured local pro
 
 Alternative considered: only stop processes started by this extension. This was rejected because it would fail to turn off a manually started local router server, which is not what the user wants.
 
-### Decision: Use GPT-5.4 Nano as the remote router model
+### Decision: Use GPT-5.4 Mini as the remote router model
 
-Use `openai-codex/gpt-5.4-nano` for remote mode so the router uses the user's ChatGPT/OpenAI Codex subscription rather than OpenRouter or a direct OpenAI API key. The router task is translation, language classification, thinking-level selection, and small JSON output. Nano is sufficient for this expected workload.
+Use `openai-codex/gpt-5.4-mini` for remote mode so the router uses the user's ChatGPT/OpenAI Codex subscription rather than OpenRouter or a direct OpenAI API key. The router task is translation, language classification, thinking-level selection, and small JSON output. Mini is sufficient for this expected workload.
 
-The installed Pi catalog currently exposes `openai-codex/gpt-5.4-mini` but may not expose `openai-codex/gpt-5.4-nano` yet. Keep Nano as the configured target and allow an operational fallback to `gpt-5.4-mini` when Nano is not present in `ctx.modelRegistry`, so remote mode keeps working until the Codex catalog includes Nano.
-
-Alternative considered: use `openai/gpt-5.4-nano` at `api.openai.com`. This was rejected because it requires an OpenAI API key instead of the user's normal ChatGPT subscription.
+Alternative considered: use `openai/gpt-5.4-mini` at `api.openai.com`. This was rejected because it requires an OpenAI API key instead of the user's normal ChatGPT subscription.
 
 ## Risks / Trade-offs
 
@@ -79,7 +77,7 @@ Alternative considered: use `openai/gpt-5.4-nano` at `api.openai.com`. This was 
 - Port-based stop may fail if platform tools are unavailable → Keep remote mode selected and show a warning so routing does not continue to depend on llama.cpp.
 - Existing persisted state may have the old shape → Read old state defensively and default local mode to `on` when absent.
 - Remote mode depends on OpenAI Codex authentication and availability → Preserve existing passthrough-with-warning behavior when selected remote routing is unavailable.
-- The installed OpenAI Codex model catalog may not expose GPT-5.4 Nano yet → Keep Nano as the configured target and fall back to Codex Mini only when Nano is absent from the registry.
+- The installed OpenAI Codex model catalog may change over time → Keep the remote model centralized in config so future model changes are small and visible.
 
 ## Migration Plan
 

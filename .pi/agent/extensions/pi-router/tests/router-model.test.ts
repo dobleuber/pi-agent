@@ -363,7 +363,7 @@ describe("local router model", () => {
 
 		assert.equal(fetched, false);
 		assert.equal(completedModel.provider, "openai-codex");
-		assert.equal(completedModel.id, "gpt-5.4-nano");
+		assert.equal(completedModel.id, "gpt-5.4-mini");
 		assert.equal(completedOptions.apiKey, "codex-oauth-token");
 		assert.deepEqual(completedOptions.headers, { "x-test": "header" });
 		assert.match(completedContext.systemPrompt, /Return ONLY one JSON object/);
@@ -371,28 +371,27 @@ describe("local router model", () => {
 		assert.equal(result.englishPrompt, "Improve the router.");
 	});
 
-	it("falls back from remote Nano to Mini when the OpenAI Codex catalog does not expose Nano", async () => {
+	it("does not try unavailable alternate remote models", async () => {
 		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModels.remote;
-		let requestedModels: string[] = [];
-		let completedModel: any;
+		const requestedModels: string[] = [];
+		let completeCalls = 0;
 		const modelRegistry = {
 			find: (provider: string, model: string) => {
 				requestedModels.push(`${provider}/${model}`);
-				return model === "gpt-5.4-mini" ? ({ provider, id: model, api: "openai-codex-responses" } as any) : undefined;
+				return undefined;
 			},
 			getApiKeyAndHeaders: async () => ({ ok: true as const, apiKey: "codex-oauth-token" }),
 		};
-		const complete = async (model: any) => {
-			completedModel = model;
-			return {
-				stopReason: "stop",
-				content: [{ type: "text", text: '{"translation":"Improve the router.","sourceLanguage":"es","thinkingLevel":"medium","translateFinalAnswer":true}' }],
-			} as any;
+		const complete = async () => {
+			completeCalls += 1;
+			throw new Error("complete should not be called");
 		};
 
-		await routePromptWithModel("mejora el router", remoteModel, undefined as any, {}, { modelRegistry, complete: complete as any });
+		const result = await routePromptWithModel("mejora el router", remoteModel, undefined as any, {}, { modelRegistry, complete: complete as any });
 
-		assert.deepEqual(requestedModels, ["openai-codex/gpt-5.4-nano", "openai-codex/gpt-5.4-mini"]);
-		assert.equal(completedModel.id, "gpt-5.4-mini");
+		assert.deepEqual(requestedModels, ["openai-codex/gpt-5.4-mini"]);
+		assert.equal(completeCalls, 0);
+		assert.equal(result.englishPrompt, "mejora el router");
+		assert.equal(result.degradedReason, "router model unavailable: Pi model not found: openai-codex/gpt-5.4-mini");
 	});
 });

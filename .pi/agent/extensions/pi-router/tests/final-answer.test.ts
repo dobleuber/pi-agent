@@ -584,7 +584,7 @@ describe("final answer translation", () => {
 
 		assert.equal(fetched, false);
 		assert.equal(completedModel.provider, "openai-codex");
-		assert.equal(completedModel.id, "gpt-5.4-nano");
+		assert.equal(completedModel.id, "gpt-5.4-mini");
 		assert.match(completedContext.messages[0].content[0].text, /BEGIN_PI_ROUTER_TRANSLATION_TEXT/);
 		assert.equal(result.spanishAnswer, "Listo. Los cambios están aplicados.");
 	});

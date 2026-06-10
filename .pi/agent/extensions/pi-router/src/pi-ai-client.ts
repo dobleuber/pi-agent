@@ -46,15 +46,7 @@ export async function completeWithPiRouterModel(
 }
 
 export function resolvePiRouterModel(config: RouterModelConfig, modelRegistry: PiModelRegistryLike): Model<Api> | undefined {
-	const configured = modelRegistry.find(config.provider, config.model);
-	if (configured) return configured;
-
-	for (const fallbackModel of config.fallbackModels ?? []) {
-		const fallback = modelRegistry.find(config.provider, fallbackModel);
-		if (fallback) return fallback;
-	}
-
-	return undefined;
+	return modelRegistry.find(config.provider, config.model);
 }
 
 export function userMessage(text: string): UserMessage {

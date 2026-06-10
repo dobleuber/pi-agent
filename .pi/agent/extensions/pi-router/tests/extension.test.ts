@@ -640,8 +640,8 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(savedStates, [{ state: "off", localMode: "off" }]);
 		assert.deepEqual(stoppedModels, ["llama-cpp/gemma4"]);
 		assert.deepEqual(notifications, [
-			"Pi router local mode disabled; using remote openai-codex/gpt-5.4-nano router model",
-			"router:off local:off routerModel:openai-codex/gpt-5.4-nano workModel:unknown",
+			"Pi router local mode disabled; using remote openai-codex/gpt-5.4-mini router model",
+			"router:off local:off routerModel:openai-codex/gpt-5.4-mini workModel:unknown",
 		]);
 	});
 
@@ -751,7 +751,7 @@ describe("pi-router extension entrypoint", () => {
 
 		await handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
 
-		assert.deepEqual(routedModels, ["openai-codex/gpt-5.4-nano"]);
+		assert.deepEqual(routedModels, ["openai-codex/gpt-5.4-mini"]);
 	});
 
 	it("translates final answers with the active remote router model when local mode is off", async () => {
@@ -785,7 +785,7 @@ describe("pi-router extension entrypoint", () => {
 
 		await handlers.get("message_end")![0]({ message: { role: "assistant", content: [{ type: "text", text: "Done." }] } }, ctx);
 
-		assert.deepEqual(translatedModels, ["openai-codex/gpt-5.4-nano"]);
+		assert.deepEqual(translatedModels, ["openai-codex/gpt-5.4-mini"]);
 	});
 
 	it("can turn routing on and transform normal input while keeping commands untouched", async () => {
