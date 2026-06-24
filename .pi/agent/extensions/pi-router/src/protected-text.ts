@@ -25,7 +25,7 @@ export function maskProtectedSpans(text: string): ProtectedTextMask {
 		restore(output: string): string {
 			let restored = output;
 			values.forEach((value, index) => {
-				const placeholder = new RegExp(`§P${index}§`, "g");
+				const placeholder = new RegExp(`§P${index}§(?:\\d+_{2})?`, "g");
 				restored = restored.replace(placeholder, value);
 			});
 			return restored;

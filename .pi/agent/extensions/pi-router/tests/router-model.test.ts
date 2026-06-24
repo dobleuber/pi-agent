@@ -235,7 +235,7 @@ describe("local router model", () => {
 		assert.deepEqual(metadata.unresolvedReferences, ["eso"]);
 	});
 
-	it("instructs the router model to preserve technical tokens", async () => {
+	it("instructs the router model to preserve technical tokens and markdown layout", async () => {
 		let routerPrompt = "";
 		const fetchLike = async (_url: string, init: any) => {
 			const body = JSON.parse(init.body);
@@ -251,7 +251,32 @@ describe("local router model", () => {
 		await routePromptWithModel("corre `pytest tests/test_cli.py`", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
 		assert.match(routerPrompt, /Preserve commands, paths, identifiers, quoted strings, exact placeholders, and error messages/);
+		assert.match(routerPrompt, /Preserve markdown formatting, blank lines, headings, blockquotes, bullet\/numbered list markers, and line breaks/);
 		assert.match(routerPrompt, /fenced blocks inside the task are part of the latest user prompt data/);
+	});
+
+	it("falls back to the original prompt when translation collapses user line layout", async () => {
+		const originalPrompt = "revisa mi ultima interaccion con pi agent:\n" +
+			"durante la traduccion se perdio mucho formato, revisa el problema y tratemos de arreglarlo.";
+		const collapsedTranslation = "Review my last interaction with Pi Agent: during the translation, a lot of formatting was lost; review the problem and let's try to fix it.";
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({
+				choices: [{ message: { content: JSON.stringify({
+					translation: collapsedTranslation,
+					sourceLanguage: "es",
+					thinkingLevel: "medium",
+					translateFinalAnswer: true,
+				}) } }],
+			}),
+		});
+
+		const result = await routePromptWithModel(originalPrompt, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(result.englishPrompt, originalPrompt);
+		assert.equal(result.sourceLanguage, "es");
+		assert.equal(result.translateFinalAnswer, true);
+		assert.match(result.degradedReason ?? "", /router model lost prompt formatting/);
 	});
 
 	it("falls back instead of parsing the first JSON object from contaminated router output", async () => {

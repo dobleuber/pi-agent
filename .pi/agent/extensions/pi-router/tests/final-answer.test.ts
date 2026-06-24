@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 import { DEFAULT_ROUTER_CONFIG } from "../src/config.ts";
 import { translateFinalAnswerToSpanish } from "../src/final-answer.ts";
 
+function translationPayload(body: any): string {
+	return body.messages[0].content.match(/---BEGIN_PI_ROUTER_TRANSLATION_TEXT---\n([\s\S]*?)\n---END_PI_ROUTER_TRANSLATION_TEXT---/)?.[1] ?? "";
+}
+
 describe("final answer translation", () => {
 	it("uses the local router model to translate final English answers to Spanish", async () => {
 		let body: any;
@@ -147,6 +151,169 @@ describe("final answer translation", () => {
 		assert.match(body.messages[0].content, /END_PI_ROUTER_TRANSLATION_TEXT/);
 	});
 
+	it("preserves mixed markdown structures in translated final answers", async () => {
+		const bodies: any[] = [];
+		const translations = [
+			"# Revisión del HUD",
+			"> Mantén el juego legible.",
+			[
+				"- Usa __PI_ROUTER_INLINE_0__",
+				"- Ejecuta __PI_ROUTER_INLINE_1__",
+			].join("\n"),
+			[
+				"1. Comprime la cabina",
+				"2. Mueve el calor cerca de la retícula",
+			].join("\n"),
+			"Hecho en __PI_ROUTER_INLINE_2__.",
+		];
+		const fetchLike = async (_url: string, init: any) => {
+			const body = JSON.parse(init.body);
+			bodies.push(body);
+			return {
+				ok: true,
+				json: async () => ({ choices: [{ message: { content: translations[bodies.length - 1] } }] }),
+			};
+		};
+
+		const answer = [
+			"# HUD Review",
+			"",
+			"> Keep the game readable.",
+			"",
+			"- Use `scripts/ui/hud_controller.gd`",
+			"- Run `godot --headless --check-only --path .`",
+			"",
+			"1. Compress the cockpit",
+			"2. Move heat near the reticle",
+			"",
+			"| Layer | Purpose |",
+			"|---|---|",
+			"| Combat | Aim |",
+			"",
+			"```text",
+			"┌────────────┐",
+			"│ GAME VIEW  │",
+			"└────────────┘",
+			"```",
+			"",
+			"Done in `scenes/ui/hud.tscn`.",
+		].join("\n");
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(bodies.length, 5);
+		assert.match(translationPayload(bodies[0]), /^# HUD Review$/);
+		assert.match(translationPayload(bodies[1]), /^> Keep the game readable\.$/);
+		assert.match(translationPayload(bodies[2]), /__PI_ROUTER_INLINE_0__/);
+		assert.match(translationPayload(bodies[2]), /__PI_ROUTER_INLINE_1__/);
+		assert.doesNotMatch(bodies.map(translationPayload).join("\n"), /GAME VIEW|scenes\/ui\/hud\.tscn|godot --headless/);
+		assert.equal(result.spanishAnswer, [
+			"# Revisión del HUD",
+			"",
+			"> Mantén el juego legible.",
+			"",
+			"- Usa `scripts/ui/hud_controller.gd`",
+			"- Ejecuta `godot --headless --check-only --path .`",
+			"",
+			"1. Comprime la cabina",
+			"2. Mueve el calor cerca de la retícula",
+			"",
+			"| Layer | Purpose |",
+			"|---|---|",
+			"| Combat | Aim |",
+			"",
+			"```text",
+			"┌────────────┐",
+			"│ GAME VIEW  │",
+			"└────────────┘",
+			"```",
+			"",
+			"Hecho en `scenes/ui/hud.tscn`.",
+		].join("\n"));
+	});
+
+	it("preserves blank-line boundaries around fenced table diagrams", async () => {
+		const translations = ["Aquí está la tabla:", "Siguiente párrafo."];
+		let call = 0;
+		const fetchLike = async () => {
+			const content = translations[call];
+			call += 1;
+			return {
+				ok: true,
+				json: async () => ({ choices: [{ message: { content } }] }),
+			};
+		};
+
+		const answer = [
+			"Here is the table:",
+			"",
+			"```text",
+			"   ┌────────────────────────────────────────────────────┐",
+			"   │                    VISTA PRINCIPAL                │",
+			"   │                                                    │",
+			"   │              MUNICIÓN 28  +  CALOR 34%            │",
+			"   │                                                    │",
+			"   ├────────────────────────────────────────────────────┤",
+			"   │ AMENAZA IZQUIERDA  RADAR   AMENAZA DERECHA       │",
+			"   │ MOVIMIENTO 20/50 ━━━━━╸────  RIFLE LISTO  PIERNAS OK        │",
+			"   └────────────────────────────────────────────────────┘",
+			"```",
+			"",
+			"Next paragraph.",
+		].join("\n");
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(result.spanishAnswer, [
+			"Aquí está la tabla:",
+			"",
+			"```text",
+			"   ┌────────────────────────────────────────────────────┐",
+			"   │                    VISTA PRINCIPAL                │",
+			"   │                                                    │",
+			"   │              MUNICIÓN 28  +  CALOR 34%            │",
+			"   │                                                    │",
+			"   ├────────────────────────────────────────────────────┤",
+			"   │ AMENAZA IZQUIERDA  RADAR   AMENAZA DERECHA       │",
+			"   │ MOVIMIENTO 20/50 ━━━━━╸────  RIFLE LISTO  PIERNAS OK        │",
+			"   └────────────────────────────────────────────────────┘",
+			"```",
+			"",
+			"Siguiente párrafo.",
+		].join("\n"));
+	});
+
+	it("preserves unfenced ASCII tables without translating them", async () => {
+		const bodies: any[] = [];
+		const translations = ["Antes de la tabla.", "Después de la tabla."];
+		const fetchLike = async (_url: string, init: any) => {
+			bodies.push(JSON.parse(init.body));
+			return {
+				ok: true,
+				json: async () => ({ choices: [{ message: { content: translations[bodies.length - 1] } }] }),
+			};
+		};
+
+		const asciiTable = [
+			"   ┌────────────────────────────────────────────────────┐",
+			"   │                    MAIN VIEW                      │",
+			"   │                                                    │",
+			"   │              AMMO 28  +  HEAT 34%                 │",
+			"   │                                                    │",
+			"   ├────────────────────────────────────────────────────┤",
+			"   │ LEFT THREAT      RADAR      RIGHT THREAT          │",
+			"   │ MOVE 20/50 ━━━━━╸────  RIFLE READY  LEGS OK       │",
+			"   └────────────────────────────────────────────────────┘",
+		].join("\n");
+		const answer = ["Before the table.", "", asciiTable, "", "After the table."].join("\n");
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(bodies.length, 2);
+		assert.doesNotMatch(bodies.map(translationPayload).join("\n"), /MAIN VIEW|AMMO|LEFT THREAT|RIFLE READY/);
+		assert.equal(result.spanishAnswer, ["Antes de la tabla.", "", asciiTable, "", "Después de la tabla."].join("\n"));
+	});
+
 	it("translates prose chunks while preserving fenced code blocks unchanged", async () => {
 		const bodies: any[] = [];
 		const fetchLike = async (_url: string, init: any) => {
@@ -154,15 +321,7 @@ describe("final answer translation", () => {
 			bodies.push(body);
 			return {
 				ok: true,
-				json: async () => ({
-					choices: [{ message: { content: [
-						"Primer párrafo.",
-						"",
-						"__PI_ROUTER_PRESERVED_BLOCK_0__",
-						"",
-						"Segundo párrafo.",
-					].join("\n") } }],
-				}),
+				json: async () => ({ choices: [{ message: { content: bodies.length === 1 ? "Primer párrafo." : "Segundo párrafo." } }] }),
 			};
 		};
 
@@ -178,9 +337,9 @@ describe("final answer translation", () => {
 
 		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
-		assert.equal(bodies.length, 1);
-		assert.doesNotMatch(bodies[0].messages[0].content, /keep me exact/);
-		assert.match(bodies[0].messages[0].content, /__PI_ROUTER_PRESERVED_BLOCK_0__/);
+		assert.equal(bodies.length, 2);
+		assert.doesNotMatch(translationPayload(bodies[0]), /keep me exact|PI_ROUTER_PRESERVED_BLOCK/);
+		assert.doesNotMatch(translationPayload(bodies[1]), /keep me exact|PI_ROUTER_PRESERVED_BLOCK/);
 		assert.equal(result.spanishAnswer, [
 			"Primer párrafo.",
 			"",
@@ -192,41 +351,22 @@ describe("final answer translation", () => {
 		].join("\n"));
 	});
 
-	it("translates short prose labels around fenced code blocks as one contextual request", async () => {
+	it("translates prose around fenced code blocks without sending the blocks to the model", async () => {
 		const bodies: any[] = [];
+		const translations = [
+			"Correcto: el código principal de Roger no está en este repositorio `pi-agent`.",
+			"Parece vivir en tu repositorio separado:",
+			"Remoto:",
+			"Ruta del paquete principal Roger:",
+			"Los ejemplos allí incluyen:",
+			"Este repositorio (`pi-agent`) solo tiene manejo de integración relacionado con Roger.",
+		];
 		const fetchLike = async (_url: string, init: any) => {
 			const body = JSON.parse(init.body);
 			bodies.push(body);
-			const prompt = body.messages[0].content;
-			if (prompt.includes("Correct") && prompt.includes("It appears") && prompt.includes("Examples there include")) {
-				return {
-					ok: true,
-					json: async () => ({ choices: [{ message: { content: [
-						"Correcto: el código principal de Roger no está en este repositorio `pi-agent`.",
-						"",
-						"Parece vivir en tu repositorio separado:",
-						"",
-						"__PI_ROUTER_PRESERVED_BLOCK_0__",
-						"",
-						"Remoto:",
-						"",
-						"__PI_ROUTER_PRESERVED_BLOCK_1__",
-						"",
-						"Ruta del paquete principal Roger:",
-						"",
-						"__PI_ROUTER_PRESERVED_BLOCK_2__",
-						"",
-						"Los ejemplos allí incluyen:",
-						"",
-						"__PI_ROUTER_PRESERVED_BLOCK_3__",
-						"",
-						"Este repositorio (`pi-agent`) solo tiene manejo de integración relacionado con Roger.",
-					].join("\n") } }] }),
-				};
-			}
 			return {
 				ok: true,
-				json: async () => ({ choices: [{ message: { content: prompt.match(/---BEGIN_PI_ROUTER_TRANSLATION_TEXT---\n([\s\S]*?)\n---END_PI_ROUTER_TRANSLATION_TEXT---/)?.[1] ?? "" } }] }),
+				json: async () => ({ choices: [{ message: { content: translations[bodies.length - 1] } }] }),
 			};
 		};
 
@@ -263,14 +403,59 @@ describe("final answer translation", () => {
 
 		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
-		assert.equal(bodies.length, 1);
-		assert.doesNotMatch(bodies[0].messages[0].content, /home\/dobleuber\/Projects/);
-		assert.match(bodies[0].messages[0].content, /__PI_ROUTER_PRESERVED_BLOCK_0__/);
+		assert.equal(bodies.length, 6);
+		for (const body of bodies) {
+			assert.doesNotMatch(translationPayload(body), /home\/dobleuber\/Projects|github\.com|src\/roger|PI_ROUTER_PRESERVED_BLOCK/);
+		}
 		assert.match(result.spanishAnswer, /^Correcto: el código principal de Roger/);
 		assert.match(result.spanishAnswer, /Parece vivir en tu repositorio separado:/);
 		assert.match(result.spanishAnswer, /```txt\n\/home\/dobleuber\/Projects\/personal\/pi-extensions\/\n```/);
 		assert.match(result.spanishAnswer, /Los ejemplos allí incluyen:/);
 		assert.doesNotMatch(result.degradedReason ?? "", /untranslated output/);
+	});
+
+	it("does not let translated prose corrupt multiple fenced diagram blocks", async () => {
+		const bodies: any[] = [];
+		const fetchLike = async (_url: string, init: any) => {
+			bodies.push(JSON.parse(init.body));
+			return {
+				ok: true,
+				json: async () => ({ choices: [{ message: { content: bodies.length === 1 ? "Sección A traducida." : "Sección B traducida." } }] }),
+			};
+		};
+
+		const answer = [
+			"Section A.",
+			"",
+			"```text",
+			"DIAGRAM A",
+			"```",
+			"",
+			"Section B.",
+			"",
+			"```text",
+			"DIAGRAM B",
+			"```",
+		].join("\n");
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(bodies.length, 2);
+		assert.doesNotMatch(translationPayload(bodies[0]), /DIAGRAM A|DIAGRAM B|PI_ROUTER_PRESERVED_BLOCK/);
+		assert.doesNotMatch(translationPayload(bodies[1]), /DIAGRAM A|DIAGRAM B|PI_ROUTER_PRESERVED_BLOCK/);
+		assert.equal(result.spanishAnswer, [
+			"Sección A traducida.",
+			"",
+			"```text",
+			"DIAGRAM A",
+			"```",
+			"",
+			"Sección B traducida.",
+			"",
+			"```text",
+			"DIAGRAM B",
+			"```",
+		].join("\n"));
 	});
 
 	it("keeps original prose chunks when a chunk translation fails", async () => {
@@ -290,7 +475,7 @@ describe("final answer translation", () => {
 		assert.match(result.degradedReason!, /empty response/);
 	});
 
-	it("retries failed long contextual chunks by splitting them smaller", async () => {
+	it("splits long contextual fenced-block answers into safe prose chunks", async () => {
 		const calls: string[] = [];
 		const fetchLike = async (_url: string, init: any) => {
 			const prompt = JSON.parse(init.body).messages[0].content;
@@ -325,8 +510,8 @@ describe("final answer translation", () => {
 
 		const result = await translateFinalAnswerToSpanish(longAnswer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
 
-		assert.ok(calls.some((chunk) => chunk.length > 1200), "expected the initial long chunk attempt");
-		assert.ok(calls.filter((chunk) => chunk.length <= 1200).length >= 2, "expected smaller retry chunks");
+		assert.ok(calls.length >= 2, "expected multiple prose chunks around the fenced block");
+		assert.ok(calls.every((chunk) => chunk.length <= 1200), "expected fenced-block splitting to avoid oversized chunks");
 		assert.doesNotMatch(result.spanishAnswer, /Yes — the weird parts/);
 		assert.doesNotMatch(result.degradedReason ?? "", /This operation was aborted/);
 	});
@@ -524,6 +709,75 @@ describe("final answer translation", () => {
 		assert.doesNotMatch(body.messages[0].content, /npm run build/);
 		assert.match(body.messages[0].content, /__PI_ROUTER_INLINE_0__/);
 		assert.equal(result.spanishAnswer, "- `npm run build` ❌ script faltante");
+	});
+
+	it("repairs inline placeholders with malformed numeric suffixes", async () => {
+		for (const suffix of ["0__", "3__"]) {
+			const fetchLike = async () => ({
+				ok: true,
+				json: async () => ({ choices: [{ message: { content: `Véase __PI_ROUTER_INLINE_0__${suffix}.` } }] }),
+			});
+
+			const result = await translateFinalAnswerToSpanish("See `.pi/agent/test_file:33`.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+			assert.equal(result.spanishAnswer, "Véase `.pi/agent/test_file:33`.");
+			assert.doesNotMatch(result.spanishAnswer, /\d+__/);
+		}
+	});
+
+	it("repairs protected path placeholders with malformed suffixes outside inline code", async () => {
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: "Véase §P0§3__." } }] }),
+		});
+
+		const result = await translateFinalAnswerToSpanish("See .pi/agent/test_file:33.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(result.spanishAnswer, "Véase .pi/agent/test_file:33.");
+		assert.doesNotMatch(result.spanishAnswer, /3__/);
+	});
+
+	it("preserves literal protected-placeholder examples inside inline code", async () => {
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: "Archivo: §P0§. Ejemplo literal: __PI_ROUTER_INLINE_0__." } }] }),
+		});
+
+		const result = await translateFinalAnswerToSpanish(
+			"File: .pi/agent/extensions/pi-router/src/final-answer.ts. Literal example: `§P0§3__`.",
+			DEFAULT_ROUTER_CONFIG.routerModel,
+			fetchLike,
+		);
+
+		assert.equal(result.spanishAnswer, "Archivo: .pi/agent/extensions/pi-router/src/final-answer.ts. Ejemplo literal: `§P0§3__`.");
+	});
+
+	it("preserves path-only bullet chunks without translating or warning", async () => {
+		const bodies: any[] = [];
+		const fetchLike = async (_url: string, init: any) => {
+			bodies.push(JSON.parse(init.body));
+			return {
+				ok: true,
+				json: async () => ({ choices: [{ message: { content: "Hecho." } }] }),
+			};
+		};
+		const answer = [
+			"Done.",
+			"",
+			"- `.pi/agent/extensions/pi-router/src/final-answer.ts:57-74`",
+			"- `.pi/agent/extensions/pi-router/src/index.ts:231-232`",
+		].join("\n");
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(bodies.length, 1);
+		assert.equal(result.degradedReason, undefined);
+		assert.equal(result.spanishAnswer, [
+			"Hecho.",
+			"",
+			"- `.pi/agent/extensions/pi-router/src/final-answer.ts:57-74`",
+			"- `.pi/agent/extensions/pi-router/src/index.ts:231-232`",
+		].join("\n"));
 	});
 
 	it("normalizes non-breaking-space byte artifacts in translated output", async () => {

@@ -48,15 +48,15 @@ export async function translateFinalAnswerToSpanish(
 	fetchLike: FetchLike = fetch as FetchLike,
 	runtime: PiAiRuntime = {},
 ): Promise<FinalAnswerTranslationResult> {
-	const protectedAnswer = maskProtectedSpans(englishAnswer);
-	const shouldPreserveFencedBlocksWithContext = /```[\s\S]*?```/.test(protectedAnswer.text);
+	const shouldPreserveFencedBlocksWithContext = /```[\s\S]*?```/.test(englishAnswer);
 	const preservedAnswer = shouldPreserveFencedBlocksWithContext
-		? maskFencedCodeBlocks(protectedAnswer.text)
-		: emptyPreservedBlockMask(protectedAnswer.text);
+		? maskFencedCodeBlocks(englishAnswer)
+		: emptyPreservedBlockMask(englishAnswer);
 	const inlineAnswer = maskInlineCodeSpans(preservedAnswer.text);
+	const protectedAnswer = maskProtectedSpans(inlineAnswer.text);
 	const segments = shouldPreserveFencedBlocksWithContext
-		? splitFinalAnswerSegments(inlineAnswer.text)
-		: splitProseSegments(inlineAnswer.text);
+		? splitFinalAnswerSegments(protectedAnswer.text)
+		: splitProseSegments(protectedAnswer.text);
 	const translatedSegments: string[] = [];
 	const fallbackEvents: string[] = [];
 	let chunkNumber = 0;
@@ -77,7 +77,7 @@ export async function translateFinalAnswerToSpanish(
 			}
 		}
 
-		const spanishAnswer = normalizeTranslationArtifacts(protectedAnswer.restore(inlineAnswer.restore(preservedAnswer.restore(translatedSegments.join("")))));
+		const spanishAnswer = normalizeTranslationArtifacts(preservedAnswer.restore(inlineAnswer.restore(protectedAnswer.restore(translatedSegments.join("")))));
 		return {
 			englishAnswer,
 			spanishAnswer,
@@ -196,10 +196,15 @@ function finalizeTranslatedChunk(chunk: string, content: string): FinalAnswerTra
 }
 
 function splitFinalAnswerSegments(text: string): FinalAnswerSegment[] {
-	return splitLargeProseSegment(text).map((chunk) => ({
-		text: chunk,
-		translate: hasTranslatableContent(chunk),
-	}));
+	if (!text) return [];
+	const parts = text.split(/(__PI_ROUTER_PRESERVED_BLOCK_\d+__)/g);
+	return parts.flatMap((part) => {
+		if (!part) return [];
+		if (/^__PI_ROUTER_PRESERVED_BLOCK_\d+__$/.test(part)) {
+			return [{ text: part, translate: false }];
+		}
+		return splitProseSegments(part);
+	});
 }
 
 function maskFencedCodeBlocks(text: string): PreservedBlockMask {
@@ -243,7 +248,12 @@ function maskInlineCodeSpans(text: string): InlineCodeMask {
 		restore(output: string): string {
 			let restored = output;
 			values.forEach((value, index) => {
-				const placeholder = new RegExp(`_{0,2}PI_ROUTER_(?:INLINE|EN_LINEA)_${index}_{0,2}`, "gi");
+				const malformedProtectedInlineSuffix = value.match(/^`(§P\d+§)`$/)?.[1];
+				if (malformedProtectedInlineSuffix) {
+					const malformedPlaceholder = new RegExp(`${escapeRegExp(malformedProtectedInlineSuffix)}\\d+_{2}`, "g");
+					restored = restored.replace(malformedPlaceholder, value);
+				}
+				const placeholder = new RegExp(`_{0,2}PI_ROUTER_(?:INLINE|EN_LINEA)_${index}_{0,2}(?:\\d+_{2})?`, "gi");
 				restored = restored.replace(placeholder, value);
 			});
 			return restored;
@@ -258,7 +268,7 @@ function splitProseSegments(text: string): FinalAnswerSegment[] {
 		if (!part) return [];
 		if (/^\n{2,}$/.test(part)) return [{ text: part, translate: false }];
 		if (isTechnicalBlock(part)) return [{ text: part, translate: false }];
-		return splitLargeProseSegment(part).map((chunk) => ({ text: chunk, translate: true }));
+		return splitLargeProseSegment(part).map((chunk) => ({ text: chunk, translate: hasTranslatableContent(chunk) }));
 	});
 }
 
@@ -286,7 +296,7 @@ function isTechnicalBlock(text: string): boolean {
 	if (lines.length >= 2 && lines.every((line) => line.trim().startsWith("|"))) return true;
 	if (lines.some((line) => /^(diff --git|@@\s|\+\+\+\s|---\s)/.test(line))) return true;
 	if (lines.some((line) => /^(Traceback \(|\s*at\s+\S+|\w*Error:)/.test(line))) return true;
-	if (lines.some((line) => /^[$>]\s|^(PASS|FAIL|ERROR)\b|^npm ERR!/i.test(line.trim()))) return true;
+	if (lines.some((line) => /^[$]\s|^(PASS|FAIL|ERROR)\b|^npm ERR!/i.test(line.trim()))) return true;
 	if (lines.every((line) => /^[{}[\],:\s"'A-Za-z0-9_.-]+$/.test(line.trim())) && /^[{[]/.test(lines[0].trim())) return true;
 	if (lines.some((line) => /[├└│─]/.test(line)) || lines.every((line) => /\/$|^[├└│─\s]+/.test(line.trim()))) return true;
 	return false;
@@ -294,7 +304,8 @@ function isTechnicalBlock(text: string): boolean {
 
 function hasTranslatableContent(text: string): boolean {
 	const withoutPreservedBlocks = text.replace(/__PI_ROUTER_PRESERVED_BLOCK_\d+__/g, "");
-	const withoutProtectedSpans = withoutPreservedBlocks.replace(/§P\d+§/g, "");
+	const withoutInlineCode = withoutPreservedBlocks.replace(/__PI_ROUTER_INLINE_\d+__/g, "");
+	const withoutProtectedSpans = withoutInlineCode.replace(/§P\d+§/g, "");
 	return /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(withoutProtectedSpans);
 }
 
@@ -335,6 +346,10 @@ function extractEchoedTranslationPayload(text: string): string | undefined {
 	const end = text.indexOf(FINAL_ANSWER_TEXT_END, contentStart);
 	if (end === -1) return undefined;
 	return text.slice(contentStart, end).trim();
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function fallback(englishAnswer: string, degradedReason: string): FinalAnswerTranslationResult {

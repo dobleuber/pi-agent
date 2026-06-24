@@ -51,6 +51,7 @@ Rules:
 - If sourceLanguage is en, translateFinalAnswer should be false.
 - sourceLanguage is based on the original task text, not the English translation.
 - Preserve commands, paths, identifiers, quoted strings, exact placeholders, and error messages exactly.
+- Preserve markdown formatting, blank lines, headings, blockquotes, bullet/numbered list markers, and line breaks.
 - Preserve placeholders like §P0§ and __PI_ROUTER_PRESERVED_BLOCK_0__ exactly.
 - Quoted text and fenced blocks inside the task are part of the latest user prompt data; keep them when they contain examples, errors, prior messages, or bug evidence.
 - Use conversation context only to resolve references such as "eso", "lo anterior", or "option 2".
@@ -210,20 +211,53 @@ function maskFencedCodeBlocks(text: string): PreservedBlockMask {
 
 function normalizeRouterPayload(payload: any, originalPrompt: string, restoreProtectedSpans: (text: string) => string = (text) => text): RouterModelResult {
 	const thinkingLevel = parseThinkingLevel(payload?.thinkingLevel);
+	const sourceLanguage = typeof payload?.sourceLanguage === "string" ? payload.sourceLanguage : "unknown";
+	const translateFinalAnswer = payload?.translateFinalAnswer !== false;
+	const usedConversationContext = payload?.usedConversationContext === true;
+	const resolvedReferences = parseStringArray(payload?.resolvedReferences);
+	const unresolvedReferences = parseStringArray(payload?.unresolvedReferences);
 	const translatedPrompt = typeof payload?.translation === "string" && payload.translation.trim()
 		? payload.translation.trim()
 		: typeof payload?.englishPrompt === "string" && payload.englishPrompt.trim()
 			? payload.englishPrompt.trim()
 			: originalPrompt;
+	const restoredPrompt = restoreProtectedSpans(translatedPrompt);
+	const formattingLoss = promptFormattingLoss(originalPrompt, restoredPrompt);
+	if (formattingLoss) {
+		return {
+			englishPrompt: originalPrompt,
+			sourceLanguage,
+			thinkingLevel,
+			translateFinalAnswer,
+			usedConversationContext,
+			resolvedReferences,
+			unresolvedReferences,
+			degradedReason: `router model lost prompt formatting: ${formattingLoss}`,
+		};
+	}
 	return {
-		englishPrompt: restoreProtectedSpans(translatedPrompt),
-		sourceLanguage: typeof payload?.sourceLanguage === "string" ? payload.sourceLanguage : "unknown",
+		englishPrompt: restoredPrompt,
+		sourceLanguage,
 		thinkingLevel,
-		translateFinalAnswer: payload?.translateFinalAnswer !== false,
-		usedConversationContext: payload?.usedConversationContext === true,
-		resolvedReferences: parseStringArray(payload?.resolvedReferences),
-		unresolvedReferences: parseStringArray(payload?.unresolvedReferences),
+		translateFinalAnswer,
+		usedConversationContext,
+		resolvedReferences,
+		unresolvedReferences,
 	};
+}
+
+function promptFormattingLoss(originalPrompt: string, translatedPrompt: string): string | null {
+	if (/```/.test(originalPrompt)) return null;
+	const originalLines = nonEmptyLineCount(originalPrompt);
+	const translatedLines = nonEmptyLineCount(translatedPrompt);
+	if (originalLines > 1 && translatedLines < originalLines) {
+		return `line layout collapsed from ${originalLines} to ${translatedLines} non-empty lines`;
+	}
+	return null;
+}
+
+function nonEmptyLineCount(text: string): number {
+	return text.split(/\r?\n/).filter((line) => line.trim().length > 0).length;
 }
 
 function parseRouterJsonObject(content: string): any {
