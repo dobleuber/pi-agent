@@ -52,6 +52,10 @@ describe("final answer translation", () => {
 		assert.equal(body.messages.length, 1);
 		assert.equal(body.messages[0].role, "user");
 		assert.match(body.messages[0].content, /Translate the text between ---BEGIN_PI_ROUTER_TRANSLATION_TEXT--- and ---END_PI_ROUTER_TRANSLATION_TEXT---/);
+		assert.match(body.messages[0].content, /Use consistent prose in the target language/);
+		assert.match(body.messages[0].content, /Do not mix in unrelated languages or scripts/);
+		assert.match(body.messages[0].content, /If an English word has a natural translation in the target language/);
+		assert.match(body.messages[0].content, /preserved placeholders, code, paths, commands, identifiers, product names, environment variables, and accepted technical terms/);
 		assert.match(body.messages[0].content, /Done\. The implementation is complete\./);
 		assert.doesNotMatch(body.messages[0].content, /The router now translates the prompt/);
 		assert.doesNotMatch(body.messages[0].content, /<SPANISH>Listo/);
