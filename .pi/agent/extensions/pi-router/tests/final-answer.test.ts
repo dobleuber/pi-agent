@@ -358,12 +358,12 @@ describe("final answer translation", () => {
 	it("translates prose around fenced code blocks without sending the blocks to the model", async () => {
 		const bodies: any[] = [];
 		const translations = [
-			"Correcto: el código principal de Roger no está en este repositorio `pi-agent`.",
+			"Correcto: el código principal de Roger no está en este repositorio __PI_ROUTER_INLINE_0__.",
 			"Parece vivir en tu repositorio separado:",
 			"Remoto:",
 			"Ruta del paquete principal Roger:",
 			"Los ejemplos allí incluyen:",
-			"Este repositorio (`pi-agent`) solo tiene manejo de integración relacionado con Roger.",
+			"Este repositorio (__PI_ROUTER_INLINE_1__) solo tiene manejo de integración relacionado con Roger.",
 		];
 		const fetchLike = async (_url: string, init: any) => {
 			const body = JSON.parse(init.body);
@@ -698,6 +698,40 @@ describe("final answer translation", () => {
 		].join("\n"));
 	});
 
+	it("falls back when translated chunks return the wrong inline placeholders", async () => {
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: [
+				"Puntos de extensión relevantes:",
+				"- __PI_ROUTER_INLINE_0__",
+				"- __PI_ROUTER_INLINE_1__",
+				"- __PI_ROUTER_INLINE_2__",
+				"",
+				"Candidatos de capacidad:",
+				"- __PI_ROUTER_INLINE_0__",
+				"- __PI_ROUTER_INLINE_0__",
+				"- __PI_ROUTER_INLINE_0__",
+			].join("\n") } }] }),
+		});
+
+		const answer = [
+			"Relevant extension points:",
+			"- `before_agent_start`",
+			"- `input`",
+			"- `tool_call`",
+			"",
+			"Capability candidates:",
+			"- `agent-policy-guardrails`",
+			"- `runtime-policy-engine`",
+			"- `pi-guardrail-policies`",
+		].join("\n");
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(result.spanishAnswer, answer);
+		assert.match(result.degradedReason ?? "", /inline placeholder mismatch/);
+	});
+
 	it("preserves inline commands instead of leaking malformed placeholder suffixes", async () => {
 		let body: any;
 		const fetchLike = async (_url: string, init: any) => {
@@ -727,6 +761,29 @@ describe("final answer translation", () => {
 			assert.equal(result.spanishAnswer, "Véase `.pi/agent/test_file:33`.");
 			assert.doesNotMatch(result.spanishAnswer, /\d+__/);
 		}
+	});
+
+	it("restores double-digit inline placeholders without matching shorter placeholder prefixes", async () => {
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: [
+				"Resultado:",
+				"__PI_ROUTER_INLINE_0__ __PI_ROUTER_INLINE_1__ __PI_ROUTER_INLINE_2__ __PI_ROUTER_INLINE_3__ __PI_ROUTER_INLINE_4__",
+				"__PI_ROUTER_INLINE_5__ __PI_ROUTER_INLINE_6__ __PI_ROUTER_INLINE_7__ __PI_ROUTER_INLINE_8__ __PI_ROUTER_INLINE_9__ __PI_ROUTER_INLINE_10__.",
+			].join("\n") } }] }),
+		});
+		const answer = [
+			"Final check:",
+			"`zero` `one` `two` `three` `four` `five` `six` `seven` `eight` `runtime-policy-engine` and `agent-observability-evaluation`.",
+		].join("\n");
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+
+		assert.equal(result.spanishAnswer, [
+			"Resultado:",
+			"`zero` `one` `two` `three` `four`",
+			"`five` `six` `seven` `eight` `runtime-policy-engine` `agent-observability-evaluation`.",
+		].join("\n"));
 	});
 
 	it("repairs protected path placeholders with malformed suffixes outside inline code", async () => {
