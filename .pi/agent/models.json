@@ -3,7 +3,7 @@
     "zai-coding": {
       "baseUrl": "https://api.z.ai/api/coding/paas/v4",
       "api": "openai-completions",
-      "apiKey": "ZAI_API_KEY",
+      "apiKey": "$ZAI_API_KEY",
       "models": [
         {
           "id": "glm-5.1",
@@ -30,7 +30,7 @@
     "stratus": {
       "baseUrl": "https://api.stratus.run/v1",
       "api": "openai-completions",
-      "apiKey": "STRATUS_API_KEY",
+      "apiKey": "$STRATUS_API_KEY",
       "models": [
         {
           "id": "stratus-x1ac-xl-z-ai/glm-5.1",
@@ -72,6 +72,37 @@
           ],
           "contextWindow": 196608,
           "maxTokens": 8192
+        }
+      ]
+    },
+    "llama-cpp": {
+      "baseUrl": "http://127.0.0.1:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "llama-cpp",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "supportsUsageInStreaming": false,
+        "supportsStore": false,
+        "supportsStrictMode": false,
+        "maxTokensField": "max_tokens"
+      },
+      "models": [
+        {
+          "id": "gemma4",
+          "name": "Gemma 4 8B (llama.cpp)",
+          "reasoning": false,
+          "input": [
+            "text"
+          ],
+          "contextWindow": 8192,
+          "maxTokens": 2048,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
         }
       ]
     }
