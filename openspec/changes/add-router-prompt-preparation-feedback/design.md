@@ -21,6 +21,7 @@ The router preprocesses eligible interactive input inside its asynchronous `inpu
 2. Set the first working message immediately, then use a two-second interval for subsequent messages. This avoids a silent initial delay while keeping rotation unobtrusive.
 3. Write rotating phrases to the router's existing `pi-router` status key. Wrap only `prepareRoutedPrompt` in `try/finally`; clear the interval and restore the base router status in `finally` before Pi begins normal model work. This covers success, degraded results, and thrown errors without affecting final-answer handling.
 4. Inject interval functions and phrase selection through extension dependencies. This permits deterministic lifecycle tests without real two-second delays.
+5. Centralize status formatting so all lifecycle paths use a restrained visual vocabulary: `◇ Router off` for inactivity, `◆ <phrase>` for prompt preparation, `◆ Thinking · <level>` for reasoning, and `◇ Router degraded` for blocked routing failures. Detailed diagnostics remain available through `/router` notifications and router details rather than the persistent footer.
 
 ## Risks / Trade-offs
 

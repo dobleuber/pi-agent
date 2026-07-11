@@ -8,13 +8,15 @@ When the Pi router preprocesses an initial user prompt, the prompt temporarily d
 - Select messages from a dedicated set of playful prompt-related phrases rather than reusing the general reasoning phrases.
 - Rotate the working message every two seconds without repeating the same phrase consecutively.
 - Stop rotation and restore the router's normal status after preprocessing succeeds, fails, degrades, or is otherwise completed.
-- Leave final-answer translation feedback and normal reasoning behavior unchanged.
+- Present router activity with concise, human-readable symbols and labels instead of raw diagnostic tokens.
+- Leave final-answer translation behavior unchanged.
 
 ## Capabilities
 
 ### New Capabilities
 
 - `router-prompt-preparation-feedback`: Defines visible, rotating working feedback and lifecycle cleanup while the router preprocesses an initial prompt.
+- `router-status-presentation`: Defines concise visual presentation for disabled, prompt-preparation, reasoning, and degraded router states.
 
 ### Modified Capabilities
 

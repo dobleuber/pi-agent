@@ -41,6 +41,10 @@ export function pickPromptPreparationPhrase(phrases: readonly string[], previous
 	return candidates[Math.floor(random() * candidates.length)];
 }
 
+function routerIdleStatus(state: RouterConfig["state"]): string {
+	return state === "on" ? "◆ Router on" : "◇ Router off";
+}
+
 interface PendingRoutedTurn {
 	details: RouterDetailsEntry;
 	shouldTranslateFinalAnswer: boolean;
@@ -149,7 +153,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		refreshRouterSettingsFromStore();
 		config = refreshActiveRouterModel({ ...config, state });
 		saveRouterSettings();
-		ctx.ui.setStatus("pi-router", `router:${config.state}`);
+		ctx.ui.setStatus("pi-router", routerIdleStatus(config.state));
 	}
 
 	async function setLocalMode(localMode: RouterConfig["localMode"], ctx: any) {
@@ -208,7 +212,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 
 	pi.on("session_start", async (_event, ctx) => {
 		refreshRouterSettingsFromStore();
-		ctx.ui.setStatus("pi-router", `router:${config.state}`);
+		ctx.ui.setStatus("pi-router", routerIdleStatus(config.state));
 	});
 
 	pi.on("message_end", async (event, ctx) => {
@@ -273,10 +277,6 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			return { action: "continue" };
 		}
 
-		if (config.state === "on") {
-			ctx.ui.setStatus("pi-router", "router:on routing...");
-		}
-
 		const prepare = () => prepareRoutedPrompt({
 				prompt: event.text,
 				config,
@@ -292,16 +292,16 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			const startInterval = dependencies.setInterval ?? setInterval;
 			const stopInterval = dependencies.clearInterval ?? clearInterval;
 			let workingMessage = pickPhrase(phrases);
-			ctx.ui.setStatus("pi-router", `router:on · ${workingMessage}`);
+			ctx.ui.setStatus("pi-router", `◆ ${workingMessage}`);
 			const phraseInterval = startInterval(() => {
 				workingMessage = pickPhrase(phrases, workingMessage);
-				ctx.ui.setStatus("pi-router", `router:on · ${workingMessage}`);
+				ctx.ui.setStatus("pi-router", `◆ ${workingMessage}`);
 			}, 2_000);
 			try {
 				prepared = await prepare();
 			} finally {
 				stopInterval(phraseInterval);
-				ctx.ui.setStatus("pi-router", "router:on");
+				ctx.ui.setStatus("pi-router", routerIdleStatus("on"));
 			}
 		} else {
 			prepared = await prepare();
@@ -313,7 +313,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		if (prepared.action === "handled") {
 			pi.appendEntry("pi-router-details", prepared.details);
 			ctx.ui.notify(prepared.message, "warning");
-			ctx.ui.setStatus("pi-router", `router:${config.state} degraded`);
+			ctx.ui.setStatus("pi-router", "◇ Router degraded");
 			return { action: "handled" };
 		}
 
@@ -326,7 +326,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		if (prepared.warning) {
 			ctx.ui.notify(prepared.warning, "warning");
 		}
-		ctx.ui.setStatus("pi-router", `router:${config.state} thinking:${prepared.result.thinkingLevel}${prepared.warning ? " degraded" : ""}`);
+		ctx.ui.setStatus("pi-router", `◆ Thinking · ${prepared.result.thinkingLevel}${prepared.warning ? " · degraded" : ""}`);
 		return { action: "transform", text: prepared.prompt };
 	});
 }

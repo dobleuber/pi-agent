@@ -49,7 +49,7 @@ describe("pi-router extension entrypoint", () => {
 		await commands.get("router")!.handler("", ctx);
 
 		assert.deepEqual(inputResult, { action: "continue" });
-		assert.deepEqual(statuses, [["pi-router", "router:off"]]);
+		assert.deepEqual(statuses, [["pi-router", "◇ Router off"]]);
 		assert.deepEqual(notifications, [
 			"router:off local:on routerModel:llama-cpp/gemma4 workModel:unknown",
 		]);
@@ -84,14 +84,11 @@ describe("pi-router extension entrypoint", () => {
 		statuses.length = 0;
 
 		const inputPromise = handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
-		assert.deepEqual(statuses, [
-			["pi-router", "router:on routing..."],
-			["pi-router", "router:on · Untangling the prompt…"],
-		]);
+		assert.deepEqual(statuses, [["pi-router", "◆ Untangling the prompt…"]]);
 		assert.equal(intervals[0].delay, 2_000);
 
 		intervals[0].callback();
-		assert.deepEqual(statuses.at(-1), ["pi-router", "router:on · Packing the context…"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "◆ Packing the context…"]);
 
 		finishRouting({
 			englishPrompt: "Improve the router.",
@@ -102,7 +99,7 @@ describe("pi-router extension entrypoint", () => {
 		await inputPromise;
 
 		assert.equal(intervals[0].cleared, true);
-		assert.deepEqual(statuses.at(-1), ["pi-router", "router:on thinking:medium"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "◆ Thinking · medium"]);
 	});
 
 	it("clears prompt-preparation feedback when routing throws", async () => {
@@ -130,7 +127,7 @@ describe("pi-router extension entrypoint", () => {
 			/router unavailable/,
 		);
 
-		assert.deepEqual(statuses.at(-1), ["pi-router", "router:on"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "◆ Router on"]);
 		assert.equal(interval.cleared, true);
 	});
 
@@ -582,13 +579,14 @@ describe("pi-router extension entrypoint", () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
 		const notifications: string[] = [];
+		const statuses: Array<[string, string]> = [];
 		const pi = {
 			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
 			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
 			appendEntry() {},
 			setThinkingLevel() {},
 		};
-		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
+		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus(name: string, value: string) { statuses.push([name, value]); } } };
 
 		installPiRouter(pi as any, {
 			config: { ...DEFAULT_TEST_CONFIG, routerModel: { ...DEFAULT_TEST_CONFIG.routerModel, fallbackMode: "error" } },
@@ -606,6 +604,7 @@ describe("pi-router extension entrypoint", () => {
 
 		assert.deepEqual(result, { action: "handled" });
 		assert.match(notifications.at(-1)!, /router model unavailable: timeout/);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "◇ Router degraded"]);
 	});
 
 	it("shows immediate prompt-preparation status before waiting for the router model", async () => {
@@ -634,7 +633,7 @@ describe("pi-router extension entrypoint", () => {
 		await routeStarted;
 
 		assert.equal(statuses.at(-1)?.[0], "pi-router");
-		assert.match(statuses.at(-1)?.[1] ?? "", /^router:on · .+…$/);
+		assert.match(statuses.at(-1)?.[1] ?? "", /^◆ .+…$/);
 
 		resolveRoute({
 			englishPrompt: "Improve the router.",
@@ -645,7 +644,7 @@ describe("pi-router extension entrypoint", () => {
 		const result = await pending;
 
 		assert.deepEqual(result, { action: "transform", text: "Improve the router." });
-		assert.deepEqual(statuses.at(-1), ["pi-router", "router:on thinking:medium"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "◆ Thinking · medium"]);
 	});
 
 	it("persists router state changes and restores them in new sessions", async () => {
@@ -676,7 +675,7 @@ describe("pi-router extension entrypoint", () => {
 		await commands.get("router")!.handler("off", ctx);
 		await commands.get("router")!.handler("on", ctx);
 
-		assert.deepEqual(statuses[0], ["pi-router", "router:on"]);
+		assert.deepEqual(statuses[0], ["pi-router", "◆ Router on"]);
 		assert.deepEqual(savedStates, [
 			{ state: "off", localMode: "on" },
 			{ state: "on", localMode: "on" },
