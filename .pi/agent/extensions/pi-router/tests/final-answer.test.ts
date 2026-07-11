@@ -153,6 +153,69 @@ describe("final answer translation", () => {
 		assert.equal(result.degradedReason, undefined);
 	});
 
+	it("repairs multiple residual-English fragments with one additional request", async () => {
+		const calls: string[] = [];
+		const fetchLike = async (_url: string, init: any) => {
+			const prompt = JSON.parse(init.body).messages[0].content as string;
+			calls.push(prompt);
+			let content: string;
+			if (prompt.includes("BEGIN_PI_ROUTER_REPAIR_TEXT")) {
+				content = "Esto ya está suficientemente maduro para un cambio de OpenSpec como:\n\nLos paquetes resuelven el abastecimiento, pero todavía necesitamos dar forma al cambio.";
+			} else if (prompt.includes("This is now mature enough")) {
+				content = "This is now mature eenough for an OpenSpec change such as:";
+			} else {
+				content = "The packs solve sourcing, but we still need to shape the change.";
+			}
+			return { ok: true, json: async () => ({ choices: [{ message: { content } }] }) };
+		};
+		const answer = "This is now mature enough for an OpenSpec change such as:\n\nThe packs solve sourcing, but we still need to shape the change.";
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike as any);
+
+		assert.equal(calls.length, 3);
+		assert.match(calls[2], /BEGIN_PI_ROUTER_REPAIR_TEXT/);
+		assert.equal(result.spanishAnswer, "Esto ya está suficientemente maduro para un cambio de OpenSpec como:\n\nLos paquetes resuelven el abastecimiento, pero todavía necesitamos dar forma al cambio.");
+		assert.equal(result.degradedReason, undefined);
+	});
+
+	it("does not add a repair request when the initial translations contain no residual English", async () => {
+		let calls = 0;
+		const fetchLike = async (_url: string, init: any) => {
+			calls += 1;
+			const prompt = JSON.parse(init.body).messages[0].content as string;
+			const content = prompt.includes("The first section is ready")
+				? "La primera sección está lista."
+				: "La segunda sección también está lista.";
+			return { ok: true, json: async () => ({ choices: [{ message: { content } }] }) };
+		};
+		const answer = "The first section is ready.\n\nThe second section is also ready.";
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike as any);
+
+		assert.equal(calls, 2);
+		assert.doesNotMatch(result.spanishAnswer, /\bThe\b/);
+		assert.equal(result.degradedReason, undefined);
+	});
+
+	it("returns coherent original English when the single repair pass still contains residual English", async () => {
+		let calls = 0;
+		const fetchLike = async (_url: string, init: any) => {
+			calls += 1;
+			const prompt = JSON.parse(init.body).messages[0].content as string;
+			const content = prompt.includes("BEGIN_PI_ROUTER_REPAIR_TEXT")
+				? "This is still not translated into Spanish."
+				: "This is now mature eenough for an OpenSpec change such as:";
+			return { ok: true, json: async () => ({ choices: [{ message: { content } }] }) };
+		};
+		const answer = "This is now mature enough for an OpenSpec change such as:";
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike as any);
+
+		assert.equal(calls, 2);
+		assert.equal(result.spanishAnswer, answer);
+		assert.match(result.degradedReason ?? "", /residual English after repair/);
+	});
+
 	it("uses a delimiter that is not broken by XML-like content in the answer", async () => {
 		let body: any;
 		const fetchLike = async (_url: string, init: any) => {
