@@ -266,6 +266,7 @@ describe("pi-router extension entrypoint", () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
 		let translateCalls = 0;
+		let persistedState: any;
 		const pi = {
 			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
 			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
@@ -275,6 +276,10 @@ describe("pi-router extension entrypoint", () => {
 		const ctx = { ui: { notify() {}, setStatus() {} } };
 
 		installPiRouter(pi as any, {
+			stateStore: {
+				loadState: () => persistedState,
+				saveState: (state) => { persistedState = state; },
+			},
 			routePrompt: async () => ({
 				englishPrompt: "Improve the router.",
 				sourceLanguage: "es",
