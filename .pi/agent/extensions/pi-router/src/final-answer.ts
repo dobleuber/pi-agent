@@ -51,6 +51,9 @@ export async function translateFinalAnswerToSpanish(
 	fetchLike: FetchLike = fetch as FetchLike,
 	runtime: PiAiRuntime = {},
 ): Promise<FinalAnswerTranslationResult> {
+	if (looksPredominantlySpanish(englishAnswer)) {
+		return { englishAnswer, spanishAnswer: englishAnswer };
+	}
 	const shouldPreserveFencedBlocksWithContext = /```[\s\S]*?```/.test(englishAnswer);
 	const preservedAnswer = shouldPreserveFencedBlocksWithContext
 		? maskFencedCodeBlocks(englishAnswer)
@@ -89,6 +92,20 @@ export async function translateFinalAnswerToSpanish(
 	} catch (error) {
 		return fallback(englishAnswer, `final answer translation unavailable: ${errorMessage(error)}`);
 	}
+}
+
+function looksPredominantlySpanish(text: string): boolean {
+	const tokens = text.toLocaleLowerCase("es").match(/[a-záéíóúüñ]+/gu) ?? [];
+	if (tokens.length < 3) return false;
+	const commonWords = new Set([
+		"el", "la", "los", "las", "de", "del", "que", "y", "en", "un", "una", "para", "por", "con",
+		"se", "es", "está", "son", "no", "ya", "como", "pero", "sí", "esta", "este", "estos", "estas",
+	]);
+	const highConfidenceWords = new Set(["encontré", "advertencia", "advertencias", "cambios", "respuesta", "traducción", "español"]);
+	const commonMatches = new Set(tokens.filter((token) => commonWords.has(token))).size;
+	const hasAccentSignal = /[áéíóúüñ¿¡]/iu.test(text);
+	const hasHighConfidenceWord = tokens.some((token) => highConfidenceWords.has(token));
+	return commonMatches >= 4 || (hasAccentSignal && commonMatches >= 2) || (hasHighConfidenceWord && commonMatches >= 2);
 }
 
 async function translateFinalAnswerSegment(

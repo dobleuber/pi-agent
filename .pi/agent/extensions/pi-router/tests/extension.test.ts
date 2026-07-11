@@ -19,6 +19,41 @@ it("selects a different prompt-preparation phrase when alternatives exist", () =
 });
 
 describe("pi-router extension entrypoint", () => {
+	it("restores recorded English assistant answers only in work-model context", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const pi = {
+			registerCommand() {},
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) {
+				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+			},
+		};
+		const visibleMessages = [
+			{ role: "user", content: [{ type: "text", text: "Review the warning." }] },
+			{ role: "assistant", content: [{ type: "text", text: "Encontré la causa de la advertencia." }] },
+		];
+		const ctx = {
+			sessionManager: {
+				getBranch: () => [{
+					type: "custom",
+					customType: "pi-router-details",
+					data: {
+						phase: "complete",
+						details: {
+							englishAnswer: "I found the cause of the warning.",
+							spanishAnswer: "Encontré la causa de la advertencia.",
+						},
+					},
+				}],
+			},
+		};
+
+		installPiRouter(pi as any, { stateStore: { loadState: () => undefined, saveState() {} } });
+		const result = await handlers.get("context")![0]({ messages: visibleMessages }, ctx);
+
+		assert.deepEqual(result.messages[1].content, [{ type: "text", text: "I found the cause of the warning." }]);
+		assert.deepEqual(visibleMessages[1].content, [{ type: "text", text: "Encontré la causa de la advertencia." }]);
+	});
+
 	it("registers a router status command and session status indicator", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();

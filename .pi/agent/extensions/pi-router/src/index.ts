@@ -108,6 +108,27 @@ function replaceTextContent(content: unknown, text: string): unknown {
 	return [{ type: "text", text }];
 }
 
+function restoreEnglishAssistantContext(messages: any[], branch: any[]): any[] {
+	const answersBySpanish = new Map<string, string[]>();
+	for (const entry of branch) {
+		if (entry?.type !== "custom" || entry.customType !== "pi-router-details" || entry.data?.phase !== "complete") continue;
+		const english = entry.data.details?.englishAnswer;
+		const spanish = entry.data.details?.spanishAnswer;
+		if (typeof english !== "string" || typeof spanish !== "string" || english === spanish) continue;
+		answersBySpanish.set(spanish, [...(answersBySpanish.get(spanish) ?? []), english]);
+	}
+
+	return messages.map((message) => {
+		if (message?.role !== "assistant") return message;
+		const spanish = extractSingleTextContent(message.content);
+		if (spanish === null) return message;
+		const englishAnswers = answersBySpanish.get(spanish);
+		const english = englishAnswers?.shift();
+		if (english === undefined) return message;
+		return { ...message, content: replaceTextContent(message.content, english) };
+	});
+}
+
 function completeSkippedFinalAnswer(entry: RouterDetailsEntry, reason: string): RouterDetailsEntry {
 	return extendRouterDetailsAfterCompletion(entry, {
 		englishAnswer: "",
@@ -233,6 +254,11 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	pi.on("session_start", async (_event, ctx) => {
 		refreshRouterSettingsFromStore();
 		ctx.ui.setStatus("pi-router", routerIdleStatus(config.state, ctx));
+	});
+
+	pi.on("context", async (event, ctx) => {
+		const branch = ctx.sessionManager?.getBranch?.() ?? [];
+		return { messages: restoreEnglishAssistantContext(event.messages, branch) };
 	});
 
 	pi.on("message_end", async (event, ctx) => {

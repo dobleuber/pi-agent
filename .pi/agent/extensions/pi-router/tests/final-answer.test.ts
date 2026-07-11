@@ -137,6 +137,22 @@ describe("final answer translation", () => {
 		assert.equal(result.degradedReason, "final answer translation unavailable: untranslated output");
 	});
 
+	it("bypasses translation when the complete final answer is already Spanish", async () => {
+		let calls = 0;
+		const fetchLike = async () => {
+			calls += 1;
+			throw new Error("translation should not be requested");
+		};
+		const answer = "Encontré la causa de las advertencias. Los cambios recientes no rompieron la traducción y la respuesta ya está en español.";
+
+		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike as any);
+
+		assert.equal(calls, 0);
+		assert.equal(result.englishAnswer, answer);
+		assert.equal(result.spanishAnswer, answer);
+		assert.equal(result.degradedReason, undefined);
+	});
+
 	it("uses a delimiter that is not broken by XML-like content in the answer", async () => {
 		let body: any;
 		const fetchLike = async (_url: string, init: any) => {
