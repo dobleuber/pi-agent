@@ -160,7 +160,7 @@ describe("final answer translation", () => {
 			calls.push(prompt);
 			let content: string;
 			if (prompt.includes("BEGIN_PI_ROUTER_REPAIR_TEXT")) {
-				content = "Esto ya está suficientemente maduro para un cambio de OpenSpec como:\n\nLos paquetes resuelven el abastecimiento, pero todavía necesitamos dar forma al cambio.";
+				content = "---BEGIN_PI_ROUTER_REPAIR_TEXT---\nEsto ya está suficientemente maduro para un cambio de OpenSpec como:\n\nLos paquetes resuelven el abastecimiento, pero todavía necesitamos dar forma al cambio.\n---END_PI_ROUTER_REPAIR_TEXT---";
 			} else if (prompt.includes("This is now mature enough")) {
 				content = "This is now mature eenough for an OpenSpec change such as:";
 			} else {

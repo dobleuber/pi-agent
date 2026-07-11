@@ -198,7 +198,7 @@ async function translateFinalAnswerChunk(
 			if (!content.trim()) {
 				return fallback(chunk, "final answer translation unavailable: empty response");
 			}
-			return finalizeTranslatedChunk(chunk, content);
+			return finalizeTranslatedChunk(chunk, content, mode);
 		}
 
 		const response = await fetchLike(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
@@ -221,7 +221,7 @@ async function translateFinalAnswerChunk(
 		if (typeof content !== "string" || !content.trim()) {
 			return fallback(chunk, "final answer translation unavailable: empty response");
 		}
-		return finalizeTranslatedChunk(chunk, content);
+		return finalizeTranslatedChunk(chunk, content, mode);
 	} catch (error) {
 		return fallback(chunk, `final answer translation unavailable: ${errorMessage(error)}`);
 	} finally {
@@ -229,9 +229,11 @@ async function translateFinalAnswerChunk(
 	}
 }
 
-function finalizeTranslatedChunk(chunk: string, content: string): FinalAnswerTranslationResult {
+function finalizeTranslatedChunk(chunk: string, content: string, mode: "translate" | "repair" = "translate"): FinalAnswerTranslationResult {
 	const cleanedAnswer = cleanTranslatedAnswer(content);
-	const spanishAnswer = extractEchoedTranslationPayload(cleanedAnswer) ?? cleanedAnswer;
+	const spanishAnswer = mode === "repair"
+		? extractDelimitedPayload(cleanedAnswer, REPAIR_TEXT_BEGIN, REPAIR_TEXT_END) ?? cleanedAnswer
+		: extractEchoedTranslationPayload(cleanedAnswer) ?? cleanedAnswer;
 	if (!spanishAnswer) {
 		return fallback(chunk, "final answer translation unavailable: empty response after cleanup");
 	}
@@ -444,10 +446,14 @@ function normalizeTranslationArtifacts(text: string): string {
 }
 
 function extractEchoedTranslationPayload(text: string): string | undefined {
-	const begin = text.indexOf(FINAL_ANSWER_TEXT_BEGIN);
+	return extractDelimitedPayload(text, FINAL_ANSWER_TEXT_BEGIN, FINAL_ANSWER_TEXT_END);
+}
+
+function extractDelimitedPayload(text: string, beginMarker: string, endMarker: string): string | undefined {
+	const begin = text.indexOf(beginMarker);
 	if (begin === -1) return undefined;
-	const contentStart = begin + FINAL_ANSWER_TEXT_BEGIN.length;
-	const end = text.indexOf(FINAL_ANSWER_TEXT_END, contentStart);
+	const contentStart = begin + beginMarker.length;
+	const end = text.indexOf(endMarker, contentStart);
 	if (end === -1) return undefined;
 	return text.slice(contentStart, end).trim();
 }
