@@ -99,7 +99,7 @@ function replaceTextContent(content: unknown, text: string): unknown {
 }
 
 function restoreEnglishAssistantContext(messages: any[], branch: any[]): any[] {
-	const answersByTimestamp = new Map<number, string>();
+	const answersByTimestamp = new Map<number, string[]>();
 	const answersBySpanish = new Map<string, string[]>();
 	for (const entry of branch) {
 		if (entry?.type !== "custom" || entry.customType !== "pi-router-details" || entry.data?.phase !== "complete") continue;
@@ -108,24 +108,28 @@ function restoreEnglishAssistantContext(messages: any[], branch: any[]): any[] {
 		const assistantTimestamp = entry.data.details?.assistantTimestamp;
 		if (typeof english !== "string" || typeof spanish !== "string" || english === spanish) continue;
 		if (typeof assistantTimestamp === "number") {
-			answersByTimestamp.set(assistantTimestamp, english);
+			answersByTimestamp.set(assistantTimestamp, [...(answersByTimestamp.get(assistantTimestamp) ?? []), english]);
 		} else {
 			answersBySpanish.set(spanish, [...(answersBySpanish.get(spanish) ?? []), english]);
 		}
 	}
 	const assistantCounts = new Map<string, number>();
+	const assistantTimestampCounts = new Map<number, number>();
 	for (const message of messages) {
 		if (message?.role !== "assistant") continue;
 		const text = extractSingleTextContent(message.content);
 		if (text !== null) assistantCounts.set(text, (assistantCounts.get(text) ?? 0) + 1);
+		if (typeof message.timestamp === "number") {
+			assistantTimestampCounts.set(message.timestamp, (assistantTimestampCounts.get(message.timestamp) ?? 0) + 1);
+		}
 	}
 
 	return messages.map((message) => {
 		if (message?.role !== "assistant") return message;
-		if (typeof message.timestamp === "number") {
-			const timestampAnswer = answersByTimestamp.get(message.timestamp);
-			if (timestampAnswer !== undefined) {
-				return { ...message, content: replaceTextContent(message.content, timestampAnswer) };
+		if (typeof message.timestamp === "number" && assistantTimestampCounts.get(message.timestamp) === 1) {
+			const timestampAnswers = answersByTimestamp.get(message.timestamp);
+			if (timestampAnswers?.length === 1) {
+				return { ...message, content: replaceTextContent(message.content, timestampAnswers[0]) };
 			}
 		}
 		const spanish = extractSingleTextContent(message.content);

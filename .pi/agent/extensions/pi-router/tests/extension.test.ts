@@ -98,6 +98,25 @@ describe("pi-router extension entrypoint", () => {
 		assert.equal(result.messages[1].content[0].text, "Ready.");
 	});
 
+	it("does not restore colliding assistant timestamps", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const pi = { registerCommand() {}, on(event: string, handler: any) { handlers.set(event, [handler]); } };
+		const messages = [
+			{ role: "assistant", timestamp: 101, content: [{ type: "text", text: "Listo." }] },
+			{ role: "assistant", timestamp: 101, content: [{ type: "text", text: "Listo." }] },
+		];
+		const detail = (englishAnswer: string) => ({
+			type: "custom", customType: "pi-router-details",
+			data: { phase: "complete", details: { assistantTimestamp: 101, englishAnswer, spanishAnswer: "Listo." } },
+		});
+		const ctx = { sessionManager: { getBranch: () => [detail("Done."), detail("Ready.")] } };
+
+		installPiRouter(pi as any, { stateStore: { loadState: () => undefined, saveState() {} } });
+		const result = await handlers.get("context")![0]({ messages }, ctx);
+
+		assert.deepEqual(result.messages, messages);
+	});
+
 	it("registers a router status command and session status indicator", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
