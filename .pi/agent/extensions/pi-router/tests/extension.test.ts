@@ -1,9 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_ROUTER_CONFIG } from "../src/config.ts";
-import piRouterExtension, { installPiRouter } from "../src/index.ts";
+import piRouterExtension, { installPiRouter, pickPromptPreparationPhrase } from "../src/index.ts";
 
 const DEFAULT_TEST_CONFIG = DEFAULT_ROUTER_CONFIG;
+
+it("selects a different prompt-preparation phrase when alternatives exist", () => {
+	assert.equal(
+		pickPromptPreparationPhrase(["First", "Second", "Third"], "First", () => 0),
+		"Second",
+	);
+	assert.equal(pickPromptPreparationPhrase(["Only"], "Only", () => 0), "Only");
+});
 
 describe("pi-router extension entrypoint", () => {
 	it("registers a router status command and session status indicator", async () => {
@@ -45,6 +53,101 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(notifications, [
 			"router:off local:on routerModel:llama-cpp/gemma4 workModel:unknown",
 		]);
+	});
+
+	it("rotates prompt-preparation working messages every two seconds and clears them after routing", async () => {
+		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const workingMessages: Array<string | undefined> = [];
+		const intervals: Array<{ callback: () => void; delay: number; cleared: boolean }> = [];
+		let finishRouting!: (value: any) => void;
+		const pi = {
+			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
+			setThinkingLevel() {},
+			appendEntry() {},
+		};
+		const ctx = { ui: { notify() {}, setStatus() {}, setWorkingMessage(message?: string) { workingMessages.push(message); } } };
+
+		installPiRouter(pi as any, {
+			routePrompt: () => new Promise((resolve) => { finishRouting = resolve; }),
+			promptPreparationPhrases: ["Untangling the prompt…", "Packing the context…"],
+			pickPromptPreparationPhrase: (_phrases, previous) => previous === undefined ? "Untangling the prompt…" : "Packing the context…",
+			setInterval: (callback, delay) => {
+				const interval = { callback, delay, cleared: false };
+				intervals.push(interval);
+				return interval as any;
+			},
+			clearInterval: (interval: any) => { interval.cleared = true; },
+		});
+		await commands.get("router")!.handler("on", ctx);
+
+		const inputPromise = handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
+		assert.deepEqual(workingMessages, ["Untangling the prompt…"]);
+		assert.equal(intervals[0].delay, 2_000);
+
+		intervals[0].callback();
+		assert.deepEqual(workingMessages, ["Untangling the prompt…", "Packing the context…"]);
+
+		finishRouting({
+			englishPrompt: "Improve the router.",
+			sourceLanguage: "es",
+			thinkingLevel: "medium",
+			translateFinalAnswer: true,
+		});
+		await inputPromise;
+
+		assert.equal(intervals[0].cleared, true);
+		assert.equal(workingMessages.at(-1), undefined);
+	});
+
+	it("clears prompt-preparation feedback when routing throws", async () => {
+		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const workingMessages: Array<string | undefined> = [];
+		const interval = { cleared: false };
+		const pi = {
+			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
+		};
+		const ctx = { ui: { notify() {}, setStatus() {}, setWorkingMessage(message?: string) { workingMessages.push(message); } } };
+
+		installPiRouter(pi as any, {
+			routePrompt: async () => { throw new Error("router unavailable"); },
+			promptPreparationPhrases: ["Untangling the prompt…"],
+			setInterval: () => interval as any,
+			clearInterval: () => { interval.cleared = true; },
+		});
+		await commands.get("router")!.handler("on", ctx);
+
+		await assert.rejects(
+			handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx),
+			/router unavailable/,
+		);
+
+		assert.deepEqual(workingMessages, ["Untangling the prompt…", undefined]);
+		assert.equal(interval.cleared, true);
+	});
+
+	it("does not show prompt-preparation feedback while routing is disabled", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const workingMessages: Array<string | undefined> = [];
+		let intervalCalls = 0;
+		const pi = {
+			registerCommand() {},
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
+		};
+		const ctx = { ui: { notify() {}, setStatus() {}, setWorkingMessage(message?: string) { workingMessages.push(message); } } };
+
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => ({ state: "off" }), saveState() {} },
+			setInterval: (() => { intervalCalls += 1; }) as any,
+		});
+		const result = await handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
+
+		assert.deepEqual(result, { action: "continue" });
+		assert.deepEqual(workingMessages, []);
+		assert.equal(intervalCalls, 0);
 	});
 
 	it("translates final assistant messages and updates latest router details", async () => {

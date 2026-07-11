@@ -19,6 +19,7 @@
 **/.codegraph/
 **/dist/
 **/build/
+.superpowers/
 
 # OS/editor noise
 .DS_Store

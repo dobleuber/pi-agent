@@ -16,6 +16,29 @@ export interface PiRouterDependencies {
 	translateFinalAnswer?: (answer: string, config: RouterConfig["routerModel"], ctx?: any) => Promise<FinalAnswerTranslationResult>;
 	stateStore?: RouterStateStore;
 	localLifecycle?: LocalRouterLifecycle;
+	promptPreparationPhrases?: readonly string[];
+	pickPromptPreparationPhrase?: (phrases: readonly string[], previous?: string) => string;
+	setInterval?: (callback: () => void, delay: number) => any;
+	clearInterval?: (interval: any) => void;
+}
+
+const PROMPT_PREPARATION_PHRASES = [
+	"Untangling the prompt…",
+	"Packing the context…",
+	"Polishing the question…",
+	"Lining up the instructions…",
+	"Teaching the prompt some manners…",
+	"Sharpening the request…",
+	"Transmuting intent into instructions…",
+	"Getting the prompt road-ready…",
+] as const;
+
+export function pickPromptPreparationPhrase(phrases: readonly string[], previous?: string, random: () => number = Math.random): string {
+	if (phrases.length === 0) return "Preparing the prompt…";
+	const candidates = phrases.length > 1 && previous !== undefined
+		? phrases.filter((phrase) => phrase !== previous)
+		: phrases;
+	return candidates[Math.floor(random() * candidates.length)];
 }
 
 interface PendingRoutedTurn {
@@ -254,13 +277,35 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			ctx.ui.setStatus("pi-router", "router:on routing...");
 		}
 
-		const prepared = await prepareRoutedPrompt({
-			prompt: event.text,
-			config,
-			workModel: selectedWorkModelFromPiContext(ctx),
-			routePrompt: dependencies.routePrompt
-				?? ((prompt, routerModel, context) => routePromptWithModel(prompt, routerModel, fetch as any, context, { modelRegistry: ctx.modelRegistry })),
-		});
+		const prepare = () => prepareRoutedPrompt({
+				prompt: event.text,
+				config,
+				workModel: selectedWorkModelFromPiContext(ctx),
+				routePrompt: dependencies.routePrompt
+					?? ((prompt, routerModel, context) => routePromptWithModel(prompt, routerModel, fetch as any, context, { modelRegistry: ctx.modelRegistry })),
+			});
+
+		let prepared: Awaited<ReturnType<typeof prepareRoutedPrompt>>;
+		if (config.state === "on") {
+			const phrases = dependencies.promptPreparationPhrases ?? PROMPT_PREPARATION_PHRASES;
+			const pickPhrase = dependencies.pickPromptPreparationPhrase ?? pickPromptPreparationPhrase;
+			const startInterval = dependencies.setInterval ?? setInterval;
+			const stopInterval = dependencies.clearInterval ?? clearInterval;
+			let workingMessage = pickPhrase(phrases);
+			ctx.ui?.setWorkingMessage?.(workingMessage);
+			const phraseInterval = startInterval(() => {
+				workingMessage = pickPhrase(phrases, workingMessage);
+				ctx.ui?.setWorkingMessage?.(workingMessage);
+			}, 2_000);
+			try {
+				prepared = await prepare();
+			} finally {
+				stopInterval(phraseInterval);
+				ctx.ui?.setWorkingMessage?.();
+			}
+		} else {
+			prepared = await prepare();
+		}
 
 		if (prepared.action === "continue") {
 			return { action: "continue" };
