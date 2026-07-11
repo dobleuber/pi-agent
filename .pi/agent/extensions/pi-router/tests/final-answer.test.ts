@@ -1,16 +1,37 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_ROUTER_CONFIG } from "../src/config.ts";
-import { translateFinalAnswerToSpanish } from "../src/final-answer.ts";
+import { translateFinalAnswerToSpanish as translateWithPiAi } from "../src/final-answer.ts";
+import type { PiAiRuntime } from "../src/pi-ai-client.ts";
 
-const HTTP_TEST_MODEL = { ...DEFAULT_ROUTER_CONFIG.routerModel, provider: "test-http", model: "test-translator", baseUrl: "http://127.0.0.1:11434/v1" };
+const HTTP_TEST_MODEL = { ...DEFAULT_ROUTER_CONFIG.routerModel, provider: "test-http", model: "test-translator" };
+
+function runtimeFromFetchLike(fetchLike: any): PiAiRuntime {
+	return {
+		modelRegistry: {
+			find: (provider, model) => ({ provider, id: model, api: "test" }) as any,
+			getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "test" }),
+		},
+		complete: (async (model: any, context: any) => {
+			const messages = context.messages.map((message: any) => ({ role: message.role, content: message.content.map((part: any) => part.text ?? "").join("\n") }));
+			const response = await fetchLike("pi-ai:test", { signal: new AbortController().signal, body: JSON.stringify({ model: model.id, messages, max_tokens: 4096 }) });
+			if (!response.ok) return { role: "assistant", stopReason: "error", errorMessage: `HTTP ${response.status ?? "error"}`, content: [], timestamp: Date.now() } as any;
+			const payload = await response.json();
+			return { role: "assistant", stopReason: "stop", content: [{ type: "text", text: payload?.choices?.[0]?.message?.content ?? "" }], timestamp: Date.now() } as any;
+		}) as any,
+	};
+}
+
+function translateFinalAnswerToSpanish(answer: string, config: any, fetchLike?: any, runtime?: PiAiRuntime) {
+	return translateWithPiAi(answer, config, runtime ?? runtimeFromFetchLike(fetchLike));
+}
 
 function translationPayload(body: any): string {
 	return body.messages[0].content.match(/---BEGIN_PI_ROUTER_TRANSLATION_TEXT---\n([\s\S]*?)\n---END_PI_ROUTER_TRANSLATION_TEXT---/)?.[1] ?? "";
 }
 
 describe("final answer translation", () => {
-	it("uses the local router model to translate final English answers to Spanish", async () => {
+	it("uses Pi AI to translate final English answers to Spanish", async () => {
 		let body: any;
 		const fetchLike = async (_url: string, init: any) => {
 			body = JSON.parse(init.body);
@@ -616,22 +637,6 @@ describe("final answer translation", () => {
 
 		assert.ok(bodies.length > 1);
 		assert.equal(result.spanishAnswer, Array.from({ length: bodies.length }, (_, index) => `Fragmento ${index + 1}.`).join(""));
-	});
-
-	it("allocates enough output tokens for longer Spanish translations", async () => {
-		let body: any;
-		const input = "x".repeat(1000);
-		const fetchLike = async (_url: string, init: any) => {
-			body = JSON.parse(init.body);
-			return {
-				ok: true,
-				json: async () => ({ choices: [{ message: { content: "traducido" } }] }),
-			};
-		};
-
-		await translateFinalAnswerToSpanish(input, HTTP_TEST_MODEL, fetchLike);
-
-		assert.equal(body.max_tokens, 750);
 	});
 
 	it("preserves un-fenced technical output blocks", async () => {

@@ -13,10 +13,6 @@ export interface PiAiRuntime {
 	complete?: CompleteLike;
 }
 
-export function shouldUsePiAi(config: RouterModelConfig): boolean {
-	return config.provider === "openai-codex";
-}
-
 export async function completeWithPiRouterModel(
 	config: RouterModelConfig,
 	context: Context,

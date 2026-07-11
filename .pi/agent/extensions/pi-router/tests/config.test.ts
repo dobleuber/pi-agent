@@ -7,7 +7,7 @@ describe("router configuration", () => {
 		assert.equal(DEFAULT_ROUTER_CONFIG.state, "off");
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.provider, "openai-codex");
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.model, "gpt-5.4-mini");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.baseUrl, "https://chatgpt.com/backend-api");
+		assert.equal("baseUrl" in DEFAULT_ROUTER_CONFIG.routerModel, false);
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.timeoutMs, 15000);
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.fallbackMode, "passthrough-with-warning");
 	});

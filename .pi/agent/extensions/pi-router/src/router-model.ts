@@ -1,5 +1,6 @@
 import type { RouterModelConfig } from "./config.ts";
-import { assistantText, completeWithPiRouterModel, shouldUsePiAi, userMessage, type PiAiRuntime } from "./pi-ai-client.ts";
+import { assistantText, completeWithPiRouterModel, userMessage, type PiAiRuntime } from "./pi-ai-client.ts";
+import { validatePlaceholderIntegrity } from "./placeholder-integrity.ts";
 import { maskProtectedSpans } from "./protected-text.ts";
 
 export type ThinkingLevel = "low" | "medium" | "high";
@@ -36,13 +37,6 @@ interface PreservedBlockMask {
 	restore(text: string): string;
 	values: string[];
 }
-
-type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{
-	ok: boolean;
-	status?: number;
-	text?: () => Promise<string>;
-	json: () => Promise<any>;
-}>;
 
 const ROUTER_SYSTEM_PROMPT = `You are Pi Router, a translation/classification function. Return ONLY one JSON object. No prose, no markdown, no extra tasks, no chat transcript.
 Rules:
@@ -82,7 +76,6 @@ export function createRouterMetadata(input: {
 export async function routePromptWithModel(
 	prompt: string,
 	config: RouterModelConfig,
-	fetchLike: FetchLike = fetch as FetchLike,
 	context: RouterContextOptions = {},
 	runtime: PiAiRuntime = {},
 ): Promise<RouterModelResult> {
@@ -93,57 +86,20 @@ export async function routePromptWithModel(
 	const preservedPrompt = maskFencedCodeBlocks(prompt);
 	const protectedPrompt = maskProtectedSpans(preservedPrompt.text);
 	const restorePreservedPrompt = (text: string) => preservedPrompt.restore(protectedPrompt.restore(text));
-	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 	try {
-		if (shouldUsePiAi(config)) {
-			const response = await completeWithPiRouterModel(
-				config,
-				buildRouterPiAiContext(protectedPrompt.text, context),
-				runtime,
-			);
-			const content = assistantText(response);
-			if (content.trim().length === 0) {
-				return passthrough(prompt, "router model returned no content");
-			}
-			return normalizeRouterPayload(parseRouterJsonObject(content), prompt, restorePreservedPrompt);
-		}
-
-		const response = await fetchLike(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			signal: controller.signal,
-			body: JSON.stringify({
-				model: config.model,
-				messages: buildRouterMessages(protectedPrompt.text, context),
-				temperature: 0,
-				max_tokens: 512,
-				response_format: { type: "json_object" },
-				stop: ["<|im_end|>"],
-			}),
-		});
-		if (!response.ok) {
-			return passthrough(prompt, `router model unavailable: HTTP ${response.status ?? "error"}`);
-		}
-		const payload = await response.json();
-		const content = payload?.choices?.[0]?.message?.content;
-		if (typeof content !== "string" || content.trim().length === 0) {
+		const response = await completeWithPiRouterModel(
+			config,
+			buildRouterPiAiContext(protectedPrompt.text, context),
+			runtime,
+		);
+		const content = assistantText(response);
+		if (content.trim().length === 0) {
 			return passthrough(prompt, "router model returned no content");
 		}
-		return normalizeRouterPayload(parseRouterJsonObject(content), prompt, restorePreservedPrompt);
+		return normalizeRouterPayload(parseRouterJsonObject(content), prompt, restorePreservedPrompt, protectedPrompt.text);
 	} catch (error) {
 		return passthrough(prompt, `router model unavailable: ${errorMessage(error)}`);
-	} finally {
-		clearTimeout(timeout);
 	}
-}
-
-function buildRouterMessages(prompt: string, context: RouterContextOptions): Array<{ role: "system" | "user" | "assistant"; content: string }> {
-	const input = buildRouterInput(prompt, context);
-	return [
-		{ role: "system", content: ROUTER_SYSTEM_PROMPT },
-		{ role: "user", content: JSON.stringify(input) },
-	];
 }
 
 function buildRouterPiAiContext(prompt: string, context: RouterContextOptions) {
@@ -189,7 +145,12 @@ function maskFencedCodeBlocks(text: string): PreservedBlockMask {
 	};
 }
 
-function normalizeRouterPayload(payload: any, originalPrompt: string, restoreProtectedSpans: (text: string) => string = (text) => text): RouterModelResult {
+function normalizeRouterPayload(
+	payload: any,
+	originalPrompt: string,
+	restoreProtectedSpans: (text: string) => string = (text) => text,
+	maskedPrompt: string = originalPrompt,
+): RouterModelResult {
 	const thinkingLevel = parseThinkingLevel(payload?.thinkingLevel);
 	const sourceLanguage = typeof payload?.sourceLanguage === "string" ? payload.sourceLanguage : "unknown";
 	const translateFinalAnswer = payload?.translateFinalAnswer !== false;
@@ -201,7 +162,15 @@ function normalizeRouterPayload(payload: any, originalPrompt: string, restorePro
 		: typeof payload?.englishPrompt === "string" && payload.englishPrompt.trim()
 			? payload.englishPrompt.trim()
 			: originalPrompt;
+	const placeholderMismatch = validatePlaceholderIntegrity(maskedPrompt, translatedPrompt);
+	if (placeholderMismatch) {
+		return passthrough(originalPrompt, `router model ${placeholderMismatch}`);
+	}
 	const restoredPrompt = restoreProtectedSpans(translatedPrompt);
+	const lostLiteral = requiredPromptLiterals(originalPrompt).find((literal) => !restoredPrompt.includes(literal));
+	if (lostLiteral) {
+		return passthrough(originalPrompt, `router model lost required literal: ${lostLiteral}`);
+	}
 	if (/^fix the tests[.!]?$/i.test(restoredPrompt) && !/\b(?:arregla|corrige|fix)\b[\s\S]*\btests?\b/i.test(originalPrompt)) {
 		return passthrough(originalPrompt, "router model leaked legacy example output");
 	}
@@ -227,6 +196,10 @@ function normalizeRouterPayload(payload: any, originalPrompt: string, restorePro
 		resolvedReferences,
 		unresolvedReferences,
 	};
+}
+
+function requiredPromptLiterals(text: string): string[] {
+	return [...text.matchAll(/`[^`\n]+`|"[^"\n]+"|'[^'\n]+'/g)].map((match) => match[0]);
 }
 
 function promptFormattingLoss(originalPrompt: string, translatedPrompt: string): string | null {

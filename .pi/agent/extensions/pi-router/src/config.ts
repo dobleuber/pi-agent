@@ -4,7 +4,6 @@ export type RouterFallbackMode = "passthrough" | "passthrough-with-warning" | "e
 export interface RouterModelConfig {
 	provider: string;
 	model: string;
-	baseUrl: string;
 	timeoutMs: number;
 	fallbackMode: RouterFallbackMode;
 	maxInputChars: number;
@@ -40,7 +39,6 @@ export interface RouterStatusInput {
 const REMOTE_ROUTER_MODEL: RouterModelConfig = {
 	provider: "openai-codex",
 	model: "gpt-5.4-mini",
-	baseUrl: "https://chatgpt.com/backend-api",
 	timeoutMs: 15000,
 	fallbackMode: "passthrough-with-warning",
 	maxInputChars: 12000,

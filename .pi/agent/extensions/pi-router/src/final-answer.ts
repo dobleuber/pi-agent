@@ -1,5 +1,5 @@
 import type { RouterModelConfig } from "./config.ts";
-import { assistantText, completeWithPiRouterModel, shouldUsePiAi, userMessage, type PiAiRuntime } from "./pi-ai-client.ts";
+import { assistantText, completeWithPiRouterModel, userMessage, type PiAiRuntime } from "./pi-ai-client.ts";
 import { validatePlaceholderIntegrity } from "./placeholder-integrity.ts";
 import { maskProtectedSpans } from "./protected-text.ts";
 
@@ -26,12 +26,6 @@ interface InlineCodeMask {
 	values: string[];
 }
 
-type FetchLike = (url: string, init: { method: string; headers: Record<string, string>; body: string; signal?: AbortSignal }) => Promise<{
-	ok: boolean;
-	status?: number;
-	json: () => Promise<any>;
-}>;
-
 const FINAL_ANSWER_TEXT_BEGIN = "---BEGIN_PI_ROUTER_TRANSLATION_TEXT---";
 const FINAL_ANSWER_TEXT_END = "---END_PI_ROUTER_TRANSLATION_TEXT---";
 const REPAIR_TEXT_BEGIN = "---BEGIN_PI_ROUTER_REPAIR_TEXT---";
@@ -51,7 +45,6 @@ const FINAL_ANSWER_RETRY_CHUNK_MAX_CHARS = 900;
 export async function translateFinalAnswerToSpanish(
 	englishAnswer: string,
 	config: RouterModelConfig,
-	fetchLike: FetchLike = fetch as FetchLike,
 	runtime: PiAiRuntime = {},
 ): Promise<FinalAnswerTranslationResult> {
 	if (looksPredominantlySpanish(englishAnswer)) {
@@ -77,7 +70,7 @@ export async function translateFinalAnswerToSpanish(
 				continue;
 			}
 			chunkNumber += 1;
-			const translated = await translateFinalAnswerSegment(segment.text, config, fetchLike, runtime);
+			const translated = await translateFinalAnswerSegment(segment.text, config, runtime);
 			if (translated.degradedReason) {
 				fallbackEvents.push(translatableChunkCount > 1 ? `chunk ${chunkNumber}: ${translated.degradedReason}` : translated.degradedReason);
 				translatedSegments.push(segment.text);
@@ -88,7 +81,7 @@ export async function translateFinalAnswerToSpanish(
 
 		let translatedText = translatedSegments.join("");
 		if (hasSignificantResidualEnglish(translatedText)) {
-			const repaired = await translateFinalAnswerChunk(translatedText, config, fetchLike, runtime, "repair");
+			const repaired = await translateFinalAnswerChunk(translatedText, config, runtime, "repair");
 			if (repaired.degradedReason || hasSignificantResidualEnglish(repaired.spanishAnswer)) {
 				return fallback(
 					englishAnswer,
@@ -142,10 +135,9 @@ function looksPredominantlySpanish(text: string): boolean {
 async function translateFinalAnswerSegment(
 	segment: string,
 	config: RouterModelConfig,
-	fetchLike: FetchLike,
 	runtime: PiAiRuntime,
 ): Promise<FinalAnswerTranslationResult> {
-	const translated = await translateFinalAnswerChunk(segment, config, fetchLike, runtime);
+	const translated = await translateFinalAnswerChunk(segment, config, runtime);
 	if (!translated.degradedReason || segment.length <= FINAL_ANSWER_RETRY_CHUNK_MAX_CHARS) {
 		return translated;
 	}
@@ -162,7 +154,7 @@ async function translateFinalAnswerSegment(
 			continue;
 		}
 		retryNumber += 1;
-		const retried = await translateFinalAnswerChunk(retryChunk, config, fetchLike, runtime);
+		const retried = await translateFinalAnswerChunk(retryChunk, config, runtime);
 		if (retried.degradedReason) {
 			fallbackEvents.push(`retry chunk ${retryNumber}: ${retried.degradedReason}`);
 			retriedSegments.push(retryChunk);
@@ -181,52 +173,23 @@ async function translateFinalAnswerSegment(
 async function translateFinalAnswerChunk(
 	chunk: string,
 	config: RouterModelConfig,
-	fetchLike: FetchLike,
 	runtime: PiAiRuntime,
 	mode: "translate" | "repair" = "translate",
 ): Promise<FinalAnswerTranslationResult> {
-	const controller = new AbortController();
-	const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
 	try {
 		const messages = mode === "repair" ? buildRepairMessages(chunk) : buildFinalAnswerMessages(chunk);
-		if (shouldUsePiAi(config)) {
-			const response = await completeWithPiRouterModel(
-				config,
-				{ messages: [userMessage(messages[0].content)] },
-				runtime,
-			);
-			const content = assistantText(response);
-			if (!content.trim()) {
-				return fallback(chunk, "final answer translation unavailable: empty response");
-			}
-			return finalizeTranslatedChunk(chunk, content, mode);
-		}
-
-		const response = await fetchLike(`${config.baseUrl.replace(/\/$/, "")}/chat/completions`, {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			signal: controller.signal,
-			body: JSON.stringify({
-				model: config.model,
-				messages,
-				temperature: 0,
-				max_tokens: Math.max(256, Math.ceil(chunk.length * 0.75)),
-				stop: ["<|im_end|>", "<end_of_turn>"],
-			}),
-		});
-		if (!response.ok) {
-			return fallback(chunk, `final answer translation unavailable: HTTP ${response.status ?? "error"}`);
-		}
-		const payload = await response.json();
-		const content = payload?.choices?.[0]?.message?.content;
-		if (typeof content !== "string" || !content.trim()) {
+		const response = await completeWithPiRouterModel(
+			config,
+			{ messages: [userMessage(messages[0].content)] },
+			runtime,
+		);
+		const content = assistantText(response);
+		if (!content.trim()) {
 			return fallback(chunk, "final answer translation unavailable: empty response");
 		}
 		return finalizeTranslatedChunk(chunk, content, mode);
 	} catch (error) {
 		return fallback(chunk, `final answer translation unavailable: ${errorMessage(error)}`);
-	} finally {
-		clearTimeout(timeout);
 	}
 }
 

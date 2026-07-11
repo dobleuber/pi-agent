@@ -1,9 +1,33 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_ROUTER_CONFIG } from "../src/config.ts";
-import { createRouterMetadata, routePromptWithModel } from "../src/router-model.ts";
+import type { PiAiRuntime } from "../src/pi-ai-client.ts";
+import { createRouterMetadata, routePromptWithModel as routeWithPiAi } from "../src/router-model.ts";
 
-const HTTP_TEST_MODEL = { ...DEFAULT_ROUTER_CONFIG.routerModel, provider: "test-http", model: "test-router", baseUrl: "http://127.0.0.1:11434/v1" };
+const HTTP_TEST_MODEL = { ...DEFAULT_ROUTER_CONFIG.routerModel, provider: "test-http", model: "test-router" };
+
+function runtimeFromFetchLike(fetchLike: any): PiAiRuntime {
+	return {
+		modelRegistry: {
+			find: (provider, model) => ({ provider, id: model, api: "test" }) as any,
+			getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "test" }),
+		},
+		complete: (async (model: any, context: any) => {
+			const messages = [
+				...(context.systemPrompt ? [{ role: "system", content: context.systemPrompt }] : []),
+				...context.messages.map((message: any) => ({ role: message.role, content: message.content.map((part: any) => part.text ?? "").join("\n") })),
+			];
+			const response = await fetchLike("pi-ai:test", { signal: new AbortController().signal, body: JSON.stringify({ model: model.id, messages, response_format: { type: "json_object" } }) });
+			if (!response.ok) return { role: "assistant", stopReason: "error", errorMessage: `HTTP ${response.status ?? "error"}`, content: [], timestamp: Date.now() } as any;
+			const payload = await response.json();
+			return { role: "assistant", stopReason: "stop", content: [{ type: "text", text: payload?.choices?.[0]?.message?.content ?? "" }], timestamp: Date.now() } as any;
+		}) as any,
+	};
+}
+
+function routePromptWithModel(prompt: string, config: any, fetchLike?: any, context: any = {}, runtime?: PiAiRuntime) {
+	return routeWithPiAi(prompt, config, context, runtime ?? runtimeFromFetchLike(fetchLike));
+}
 
 describe("router model", () => {
 	it("uses the JSON router contract without concrete few-shot messages", async () => {
@@ -32,9 +56,8 @@ describe("router model", () => {
 
 		const result = await routePromptWithModel("mejora el router de Pi", HTTP_TEST_MODEL, fetchLike);
 
-		assert.equal(calls[0].url, "http://127.0.0.1:11434/v1/chat/completions");
+		assert.equal(calls[0].url, "pi-ai:test");
 		assert.equal(calls[0].body.model, "test-router");
-		assert.deepEqual(calls[0].body.stop, ["<|im_end|>"]);
 		assert.deepEqual(calls[0].body.response_format, { type: "json_object" });
 		assert.equal(calls[0].body.messages.length, 2);
 		assert.deepEqual(calls[0].body.messages.map((message: any) => message.role), ["system", "user"]);
@@ -65,6 +88,23 @@ describe("router model", () => {
 
 		assert.equal(result.englishPrompt, "Probemos de nuevo");
 		assert.match(result.degradedReason ?? "", /leaked legacy example output/);
+	});
+
+	it("falls back when routing drops quoted evidence", async () => {
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: JSON.stringify({
+				translation: "Review the router.", sourceLanguage: "es", thinkingLevel: "medium",
+				translateFinalAnswer: true, usedConversationContext: false,
+				resolvedReferences: [], unresolvedReferences: [],
+			}) } }] }),
+		});
+		const original = 'Revisa el error "connection refused" en el router.';
+
+		const result = await routePromptWithModel(original, HTTP_TEST_MODEL, fetchLike);
+
+		assert.equal(result.englishPrompt, original);
+		assert.match(result.degradedReason ?? "", /lost required literal/);
 	});
 
 	it("sends conversation context only for faithful reference resolution", async () => {
@@ -221,10 +261,8 @@ describe("router model", () => {
 			fetchLike,
 		);
 
-		assert.match(result.englishPrompt, /^Review both bugs\./);
-		assert.match(result.englishPrompt, /User-provided fenced content:/);
-		assert.match(result.englishPrompt, /No\. I onlly updated this repository’s project-local extension files:/);
-		assert.match(result.englishPrompt, /__PI_ROUTER_PROTEGIDO_0__/);
+		assert.equal(result.englishPrompt, `Veo otro error:\n${fencedBlock}\nRevisa ambos bugs.`);
+		assert.match(result.degradedReason ?? "", /placeholder mismatch/);
 	});
 
 	it("records unresolved references without inventing intent", async () => {

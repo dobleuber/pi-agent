@@ -255,7 +255,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			return;
 		}
 		const translate = dependencies.translateFinalAnswer
-			?? ((answer: string, routerModel: RouterConfig["routerModel"], context: any) => translateFinalAnswerToSpanish(answer, routerModel, fetch as any, { modelRegistry: context?.modelRegistry }));
+			?? ((answer: string, routerModel: RouterConfig["routerModel"], context: any) => translateFinalAnswerToSpanish(answer, routerModel, { modelRegistry: context?.modelRegistry }));
 		const translated = await translate(englishAnswer, config.routerModel, ctx);
 		const completedDetails = extendRouterDetailsAfterCompletion(detailsForTurn, {
 			englishAnswer: translated.englishAnswer,
@@ -291,7 +291,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 				config,
 				workModel: selectedWorkModelFromPiContext(ctx),
 				routePrompt: dependencies.routePrompt
-					?? ((prompt, routerModel, context) => routePromptWithModel(prompt, routerModel, fetch as any, context, { modelRegistry: ctx.modelRegistry })),
+					?? ((prompt, routerModel, context) => routePromptWithModel(prompt, routerModel, context, { modelRegistry: ctx.modelRegistry })),
 			});
 
 		let prepared: Awaited<ReturnType<typeof prepareRoutedPrompt>>;

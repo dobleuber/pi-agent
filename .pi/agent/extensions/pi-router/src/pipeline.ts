@@ -27,7 +27,7 @@ export async function prepareRoutedPrompt(input: PrepareRoutedPromptInput): Prom
 		return { action: "continue", prompt: input.prompt };
 	}
 
-	const routePrompt = input.routePrompt ?? ((prompt, routerModel, context) => routePromptWithModel(prompt, routerModel, fetch as any, context));
+	const routePrompt = input.routePrompt ?? ((prompt, routerModel, context) => routePromptWithModel(prompt, routerModel, context));
 	const result = await routePrompt(input.prompt, input.config.routerModel, input.context);
 	const metadata = createRouterMetadata({
 		originalPrompt: input.prompt,
