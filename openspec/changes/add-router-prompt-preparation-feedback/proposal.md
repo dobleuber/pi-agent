@@ -4,10 +4,10 @@ When the Pi router preprocesses an initial user prompt, the prompt temporarily d
 
 ## What Changes
 
-- Show a prompt-preparation-specific working message while the enabled router preprocesses an eligible initial user prompt.
+- Show a prompt-preparation-specific router status while the enabled router preprocesses an eligible initial user prompt.
 - Select messages from a dedicated set of playful prompt-related phrases rather than reusing the general reasoning phrases.
 - Rotate the working message every two seconds without repeating the same phrase consecutively.
-- Stop rotation and clear the router-owned working message after preprocessing succeeds, fails, degrades, or is otherwise completed.
+- Stop rotation and restore the router's normal status after preprocessing succeeds, fails, degrades, or is otherwise completed.
 - Leave final-answer translation feedback and normal reasoning behavior unchanged.
 
 ## Capabilities
@@ -23,5 +23,5 @@ None.
 ## Impact
 
 - Affects the Pi router input-event lifecycle and its tests under `.pi/agent/extensions/pi-router/`.
-- Uses Pi's existing working-message UI API; no external dependencies or public APIs are added.
+- Uses Pi's persistent status-bar API; no external dependencies or public APIs are added.
 - Does not change routing decisions, prompt contents, model selection, final-answer translation, or the standalone whimsical reasoning extension.

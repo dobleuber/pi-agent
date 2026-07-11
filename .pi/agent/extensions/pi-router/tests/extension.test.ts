@@ -55,10 +55,10 @@ describe("pi-router extension entrypoint", () => {
 		]);
 	});
 
-	it("rotates prompt-preparation working messages every two seconds and clears them after routing", async () => {
+	it("rotates prompt-preparation status messages every two seconds and restores status after routing", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
-		const workingMessages: Array<string | undefined> = [];
+		const statuses: Array<[string, string | undefined]> = [];
 		const intervals: Array<{ callback: () => void; delay: number; cleared: boolean }> = [];
 		let finishRouting!: (value: any) => void;
 		const pi = {
@@ -67,7 +67,7 @@ describe("pi-router extension entrypoint", () => {
 			setThinkingLevel() {},
 			appendEntry() {},
 		};
-		const ctx = { ui: { notify() {}, setStatus() {}, setWorkingMessage(message?: string) { workingMessages.push(message); } } };
+		const ctx = { ui: { notify() {}, setStatus(name: string, value?: string) { statuses.push([name, value]); } } };
 
 		installPiRouter(pi as any, {
 			routePrompt: () => new Promise((resolve) => { finishRouting = resolve; }),
@@ -81,13 +81,17 @@ describe("pi-router extension entrypoint", () => {
 			clearInterval: (interval: any) => { interval.cleared = true; },
 		});
 		await commands.get("router")!.handler("on", ctx);
+		statuses.length = 0;
 
 		const inputPromise = handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
-		assert.deepEqual(workingMessages, ["Untangling the prompt…"]);
+		assert.deepEqual(statuses, [
+			["pi-router", "router:on routing..."],
+			["pi-router", "router:on · Untangling the prompt…"],
+		]);
 		assert.equal(intervals[0].delay, 2_000);
 
 		intervals[0].callback();
-		assert.deepEqual(workingMessages, ["Untangling the prompt…", "Packing the context…"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "router:on · Packing the context…"]);
 
 		finishRouting({
 			englishPrompt: "Improve the router.",
@@ -98,19 +102,19 @@ describe("pi-router extension entrypoint", () => {
 		await inputPromise;
 
 		assert.equal(intervals[0].cleared, true);
-		assert.equal(workingMessages.at(-1), undefined);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "router:on thinking:medium"]);
 	});
 
 	it("clears prompt-preparation feedback when routing throws", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
-		const workingMessages: Array<string | undefined> = [];
+		const statuses: Array<[string, string | undefined]> = [];
 		const interval = { cleared: false };
 		const pi = {
 			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
 			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
 		};
-		const ctx = { ui: { notify() {}, setStatus() {}, setWorkingMessage(message?: string) { workingMessages.push(message); } } };
+		const ctx = { ui: { notify() {}, setStatus(name: string, value?: string) { statuses.push([name, value]); } } };
 
 		installPiRouter(pi as any, {
 			routePrompt: async () => { throw new Error("router unavailable"); },
@@ -119,25 +123,26 @@ describe("pi-router extension entrypoint", () => {
 			clearInterval: () => { interval.cleared = true; },
 		});
 		await commands.get("router")!.handler("on", ctx);
+		statuses.length = 0;
 
 		await assert.rejects(
 			handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx),
 			/router unavailable/,
 		);
 
-		assert.deepEqual(workingMessages, ["Untangling the prompt…", undefined]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "router:on"]);
 		assert.equal(interval.cleared, true);
 	});
 
 	it("does not show prompt-preparation feedback while routing is disabled", async () => {
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
-		const workingMessages: Array<string | undefined> = [];
+		const statuses: Array<[string, string | undefined]> = [];
 		let intervalCalls = 0;
 		const pi = {
 			registerCommand() {},
 			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
 		};
-		const ctx = { ui: { notify() {}, setStatus() {}, setWorkingMessage(message?: string) { workingMessages.push(message); } } };
+		const ctx = { ui: { notify() {}, setStatus(name: string, value?: string) { statuses.push([name, value]); } } };
 
 		installPiRouter(pi as any, {
 			stateStore: { loadState: () => ({ state: "off" }), saveState() {} },
@@ -146,7 +151,7 @@ describe("pi-router extension entrypoint", () => {
 		const result = await handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
 
 		assert.deepEqual(result, { action: "continue" });
-		assert.deepEqual(workingMessages, []);
+		assert.deepEqual(statuses, []);
 		assert.equal(intervalCalls, 0);
 	});
 
@@ -603,7 +608,7 @@ describe("pi-router extension entrypoint", () => {
 		assert.match(notifications.at(-1)!, /router model unavailable: timeout/);
 	});
 
-	it("shows immediate routing feedback before waiting for the router model", async () => {
+	it("shows immediate prompt-preparation status before waiting for the router model", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
 		const statuses: Array<[string, string]> = [];
@@ -628,7 +633,8 @@ describe("pi-router extension entrypoint", () => {
 		const pending = handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
 		await routeStarted;
 
-		assert.deepEqual(statuses.at(-1), ["pi-router", "router:on routing..."]);
+		assert.equal(statuses.at(-1)?.[0], "pi-router");
+		assert.match(statuses.at(-1)?.[1] ?? "", /^router:on · .+…$/);
 
 		resolveRoute({
 			englishPrompt: "Improve the router.",

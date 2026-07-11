@@ -292,16 +292,16 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			const startInterval = dependencies.setInterval ?? setInterval;
 			const stopInterval = dependencies.clearInterval ?? clearInterval;
 			let workingMessage = pickPhrase(phrases);
-			ctx.ui?.setWorkingMessage?.(workingMessage);
+			ctx.ui.setStatus("pi-router", `router:on · ${workingMessage}`);
 			const phraseInterval = startInterval(() => {
 				workingMessage = pickPhrase(phrases, workingMessage);
-				ctx.ui?.setWorkingMessage?.(workingMessage);
+				ctx.ui.setStatus("pi-router", `router:on · ${workingMessage}`);
 			}, 2_000);
 			try {
 				prepared = await prepare();
 			} finally {
 				stopInterval(phraseInterval);
-				ctx.ui?.setWorkingMessage?.();
+				ctx.ui.setStatus("pi-router", "router:on");
 			}
 		} else {
 			prepared = await prepare();
