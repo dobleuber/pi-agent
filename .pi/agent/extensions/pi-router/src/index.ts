@@ -47,18 +47,18 @@ function statusColor(ctx: any, color: "accent" | "dim" | "muted" | "warning", te
 
 function routerIdleStatus(state: RouterConfig["state"], ctx: any): string {
 	return state === "on"
-		? `${statusColor(ctx, "accent", "◆")} Router on`
+		? `${statusColor(ctx, "accent", "◆")} ${statusColor(ctx, "muted", "Router on")}`
 		: statusColor(ctx, "muted", "◇ Router off");
 }
 
 function promptPreparationStatus(message: string, ctx: any): string {
-	return `${statusColor(ctx, "accent", "◆")} ${message}`;
+	return `${statusColor(ctx, "accent", "◆")} ${statusColor(ctx, "muted", message)}`;
 }
 
 function thinkingStatus(level: string, degraded: boolean, ctx: any): string {
 	const levelText = statusColor(ctx, "dim", `· ${level}`);
 	const degradedText = degraded ? ` ${statusColor(ctx, "warning", "· degraded")}` : "";
-	return `${statusColor(ctx, "accent", "◆")} Thinking ${levelText}${degradedText}`;
+	return `${statusColor(ctx, "accent", "◆")} ${statusColor(ctx, "muted", "Thinking")} ${levelText}${degradedText}`;
 }
 
 function degradedStatus(ctx: any): string {

@@ -90,11 +90,11 @@ describe("pi-router extension entrypoint", () => {
 		statuses.length = 0;
 
 		const inputPromise = handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
-		assert.deepEqual(statuses, [["pi-router", "<accent>◆</accent> Untangling the prompt…"]]);
+		assert.deepEqual(statuses, [["pi-router", "<accent>◆</accent> <muted>Untangling the prompt…</muted>"]]);
 		assert.equal(intervals[0].delay, 2_000);
 
 		intervals[0].callback();
-		assert.deepEqual(statuses.at(-1), ["pi-router", "<accent>◆</accent> Packing the context…"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "<accent>◆</accent> <muted>Packing the context…</muted>"]);
 
 		finishRouting({
 			englishPrompt: "Improve the router.",
@@ -105,7 +105,7 @@ describe("pi-router extension entrypoint", () => {
 		await inputPromise;
 
 		assert.equal(intervals[0].cleared, true);
-		assert.deepEqual(statuses.at(-1), ["pi-router", "<accent>◆</accent> Thinking <dim>· medium</dim>"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "<accent>◆</accent> <muted>Thinking</muted> <dim>· medium</dim>"]);
 	});
 
 	it("clears prompt-preparation feedback when routing throws", async () => {
@@ -133,7 +133,7 @@ describe("pi-router extension entrypoint", () => {
 			/router unavailable/,
 		);
 
-		assert.deepEqual(statuses.at(-1), ["pi-router", "<accent>◆</accent> Router on"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "<accent>◆</accent> <muted>Router on</muted>"]);
 		assert.equal(interval.cleared, true);
 	});
 

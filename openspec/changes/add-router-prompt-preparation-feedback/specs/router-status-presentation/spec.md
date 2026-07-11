@@ -31,11 +31,11 @@ The router SHALL use Pi theme colors to emphasize status semantics without embed
 
 #### Scenario: Active prompt preparation
 - **WHEN** a prompt-preparation phrase is displayed
-- **THEN** the active `◆` symbol uses the theme accent color and the phrase remains in the normal text color
+- **THEN** the active `◆` symbol uses the theme accent color and the phrase uses the theme muted color
 
 #### Scenario: Active reasoning
 - **WHEN** a reasoning status is displayed
-- **THEN** the active `◆` symbol uses the theme accent color and the `· <level>` value uses the theme dim color
+- **THEN** the active `◆` symbol uses the theme accent color, `Thinking` uses the theme muted color, and the `· <level>` value uses the theme dim color
 
 #### Scenario: Router is disabled
 - **WHEN** `◇ Router off` is displayed
