@@ -17,3 +17,11 @@ Pi Router SHALL expose only enabled, disabled, and status command behavior.
 #### Scenario: User requests local mode
 - **WHEN** the user invokes `/router local on` or `/router local off`
 - **THEN** no local model lifecycle action is performed
+
+### Requirement: Pi AI is the sole router transport
+Pi Router SHALL invoke the configured remote model through Pi's model registry and completion API and SHALL NOT maintain a direct OpenAI-compatible HTTP transport.
+
+#### Scenario: Routing or translation executes
+- **WHEN** Pi Router calls `openai-codex/gpt-5.4-mini`
+- **THEN** it resolves subscription authentication through Pi AI
+- **AND** no llama.cpp stop tokens, local base URL, or direct `/chat/completions` request is used

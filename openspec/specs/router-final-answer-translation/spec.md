@@ -74,3 +74,15 @@ The router SHALL continue to treat unchanged English prose as a translation fall
 - **WHEN** the final-answer translator returns `Done.` for input `Done.`
 - **THEN** the router MUST preserve the original answer
 - **AND** it MUST report `final answer translation unavailable: untranslated output`
+
+### Requirement: Every protected placeholder is integrity-checked
+The router SHALL compare normalized placeholder multisets before accepting normal translation or residual-English repair output.
+
+#### Scenario: Translator drops or duplicates protected content
+- **WHEN** output changes the count of an inline-code, protected-path, or fenced-block placeholder
+- **THEN** the router MUST reject that output
+- **AND** it MUST preserve the original content with a visible degradation reason
+
+#### Scenario: Translator localizes a supported placeholder spelling
+- **WHEN** output uses a supported localized placeholder spelling with the same kind, index, and count
+- **THEN** the router MAY accept the output and restore the original protected content exactly once

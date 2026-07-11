@@ -253,6 +253,11 @@ describe("pi-router extension entrypoint", () => {
 		assert.equal(appended.at(-1)![1].details.spanishAnswer, "Listo.");
 		assert.match(appended[0][1].details.turnId, /^router-turn-\d+$/);
 		assert.equal(appended.at(-1)![1].details.turnId, appended[0][1].details.turnId);
+
+		await handlers.get("input")![0]({ text: "mejora otra cosa", source: "interactive" }, ctx);
+		await handlers.get("message_end")![0]({ message: { role: "assistant", content: [{ type: "text", text: "" }] } }, ctx);
+		assert.equal(appended.at(-1)![1].phase, "complete");
+		assert.match(appended.at(-1)![1].details.fallbackEvents[0], /empty answer/);
 	});
 
 	it("does not translate final assistant messages when router says the answer should stay English", async () => {

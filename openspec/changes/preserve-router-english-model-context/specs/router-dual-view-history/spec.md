@@ -15,3 +15,12 @@ The router SHALL restore recorded English assistant answers in the non-destructi
 #### Scenario: Assistant message has no matching router detail
 - **WHEN** an assistant message does not exactly match a recorded Spanish answer
 - **THEN** the router leaves that context message unchanged
+
+#### Scenario: Multiple details or messages share the same Spanish text
+- **WHEN** text-only legacy matching would associate more than one completed detail or assistant message
+- **THEN** the router leaves those context messages unchanged instead of applying an ambiguous English answer
+
+#### Scenario: Final answer does not require translation
+- **WHEN** a routed turn completes with `translateFinalAnswer: false`
+- **THEN** the router records a completed detail with identical English and visible answers
+- **AND** the pending turn does not remain in pre-dispatch state
