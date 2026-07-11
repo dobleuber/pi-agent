@@ -123,7 +123,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	const pendingRoutedTurns: PendingRoutedTurn[] = [];
 
 	function loadPersistedConfig(): Partial<Pick<RouterConfig, "state" | "localMode">> {
-		const persistedState = stateStore.loadState() as any;
+		const persistedState = stateStore.loadState();
 		return typeof persistedState === "string" ? { state: persistedState } : (persistedState ?? {});
 	}
 
@@ -263,7 +263,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			message: {
 				...event.message,
 				content: replaceTextContent(event.message.content, translated.spanishAnswer),
-			},
+			} as typeof event.message,
 		};
 	});
 

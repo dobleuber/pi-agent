@@ -9,7 +9,7 @@ export interface PersistedRouterState {
 }
 
 export interface RouterStateStore {
-	loadState(): PersistedRouterState | undefined;
+	loadState(): PersistedRouterState | RouterState | undefined;
 	saveState(state: PersistedRouterState): void;
 }
 
