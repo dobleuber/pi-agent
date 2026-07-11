@@ -4,6 +4,7 @@ import type { RouterMetadata, ThinkingLevel } from "./router-model.ts";
 export type RouterDetailsPhase = "pre-dispatch" | "complete";
 
 export interface RouterDetails {
+	turnId?: string;
 	originalPrompt: string;
 	transformedPrompt: string;
 	sourceLanguage: string;

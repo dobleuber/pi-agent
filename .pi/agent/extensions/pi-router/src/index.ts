@@ -115,15 +115,20 @@ function restoreEnglishAssistantContext(messages: any[], branch: any[]): any[] {
 		if (typeof english !== "string" || typeof spanish !== "string" || english === spanish) continue;
 		answersBySpanish.set(spanish, [...(answersBySpanish.get(spanish) ?? []), english]);
 	}
+	const assistantCounts = new Map<string, number>();
+	for (const message of messages) {
+		if (message?.role !== "assistant") continue;
+		const text = extractSingleTextContent(message.content);
+		if (text !== null) assistantCounts.set(text, (assistantCounts.get(text) ?? 0) + 1);
+	}
 
 	return messages.map((message) => {
 		if (message?.role !== "assistant") return message;
 		const spanish = extractSingleTextContent(message.content);
-		if (spanish === null) return message;
+		if (spanish === null || assistantCounts.get(spanish) !== 1) return message;
 		const englishAnswers = answersBySpanish.get(spanish);
-		const english = englishAnswers?.shift();
-		if (english === undefined) return message;
-		return { ...message, content: replaceTextContent(message.content, english) };
+		if (englishAnswers?.length !== 1) return message;
+		return { ...message, content: replaceTextContent(message.content, englishAnswers[0]) };
 	});
 }
 
@@ -154,6 +159,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	const stateStore = dependencies.stateStore ?? createFileRouterStateStore();
 	const initialConfig = dependencies.config ?? DEFAULT_ROUTER_CONFIG;
 	const pendingRoutedTurns: PendingRoutedTurn[] = [];
+	let nextTurnId = 1;
 
 	function loadPersistedConfig(): Partial<Pick<RouterConfig, "state">> {
 		const persistedState = stateStore.loadState();
@@ -231,17 +237,21 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		}
 		const detailsForTurn = pendingTurn.details;
 		const shouldTranslateFinalAnswer = pendingTurn.shouldTranslateFinalAnswer;
-
-		if (!shouldTranslateFinalAnswer) {
-			return;
-		}
-
 		const englishAnswer = extractSingleTextContent(event.message.content);
 		if (englishAnswer === null) {
 			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: unsupported message content"));
 			return;
 		}
 		if (!englishAnswer.trim()) {
+			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: empty answer"));
+			return;
+		}
+		if (!shouldTranslateFinalAnswer) {
+			pi.appendEntry("pi-router-details", extendRouterDetailsAfterCompletion(detailsForTurn, {
+				englishAnswer,
+				spanishAnswer: englishAnswer,
+				effectiveThinkingLevel: typeof (pi as any).getThinkingLevel === "function" ? (pi as any).getThinkingLevel() : undefined,
+			}));
 			return;
 		}
 		const translate = dependencies.translateFinalAnswer
@@ -317,11 +327,15 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		}
 
 		pi.setThinkingLevel(prepared.result.thinkingLevel);
+		const detailsForTurn: RouterDetailsEntry = {
+			...prepared.details,
+			details: { ...prepared.details.details, turnId: `router-turn-${nextTurnId++}` },
+		};
 		pendingRoutedTurns.push({
-			details: prepared.details,
+			details: detailsForTurn,
 			shouldTranslateFinalAnswer: prepared.result.translateFinalAnswer,
 		});
-		pi.appendEntry("pi-router-details", prepared.details);
+		pi.appendEntry("pi-router-details", detailsForTurn);
 		if (prepared.warning) {
 			ctx.ui.notify(prepared.warning, "warning");
 		}

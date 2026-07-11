@@ -54,6 +54,30 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(visibleMessages[1].content, [{ type: "text", text: "Encontré la causa de la advertencia." }]);
 	});
 
+	it("does not restore ambiguous duplicate Spanish answers", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const pi = {
+			registerCommand() {},
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) {
+				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+			},
+		};
+		const messages = [
+			{ role: "assistant", content: [{ type: "text", text: "Listo." }] },
+			{ role: "assistant", content: [{ type: "text", text: "Listo." }] },
+		];
+		const detail = (englishAnswer: string) => ({
+			type: "custom", customType: "pi-router-details",
+			data: { phase: "complete", details: { englishAnswer, spanishAnswer: "Listo." } },
+		});
+		const ctx = { sessionManager: { getBranch: () => [detail("Done."), detail("Ready.")] } };
+
+		installPiRouter(pi as any, { stateStore: { loadState: () => undefined, saveState() {} } });
+		const result = await handlers.get("context")![0]({ messages }, ctx);
+
+		assert.deepEqual(result.messages, messages);
+	});
+
 	it("registers a router status command and session status indicator", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
@@ -227,17 +251,20 @@ describe("pi-router extension entrypoint", () => {
 		assert.equal(appended.at(-1)![1].phase, "complete");
 		assert.equal(appended.at(-1)![1].details.englishAnswer, "Done.");
 		assert.equal(appended.at(-1)![1].details.spanishAnswer, "Listo.");
+		assert.match(appended[0][1].details.turnId, /^router-turn-\d+$/);
+		assert.equal(appended.at(-1)![1].details.turnId, appended[0][1].details.turnId);
 	});
 
 	it("does not translate final assistant messages when router says the answer should stay English", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
 		let translateCalls = 0;
+		const appended: Array<[string, any]> = [];
 		const pi = {
 			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
 			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
 			setThinkingLevel() {},
-			appendEntry() {},
+			appendEntry(type: string, data: any) { appended.push([type, data]); },
 		};
 		const ctx = { ui: { notify() {}, setStatus() {} } };
 
@@ -260,6 +287,9 @@ describe("pi-router extension entrypoint", () => {
 
 		assert.equal(translateCalls, 0);
 		assert.equal(result, undefined);
+		assert.equal(appended.at(-1)![1].phase, "complete");
+		assert.equal(appended.at(-1)![1].details.englishAnswer, "Done.");
+		assert.equal(appended.at(-1)![1].details.spanishAnswer, "Done.");
 	});
 
 	it("clears routed turn state after one assistant message", async () => {
