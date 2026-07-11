@@ -41,8 +41,28 @@ export function pickPromptPreparationPhrase(phrases: readonly string[], previous
 	return candidates[Math.floor(random() * candidates.length)];
 }
 
-function routerIdleStatus(state: RouterConfig["state"]): string {
-	return state === "on" ? "◆ Router on" : "◇ Router off";
+function statusColor(ctx: any, color: "accent" | "dim" | "muted" | "warning", text: string): string {
+	return ctx?.ui?.theme?.fg ? ctx.ui.theme.fg(color, text) : text;
+}
+
+function routerIdleStatus(state: RouterConfig["state"], ctx: any): string {
+	return state === "on"
+		? `${statusColor(ctx, "accent", "◆")} Router on`
+		: statusColor(ctx, "muted", "◇ Router off");
+}
+
+function promptPreparationStatus(message: string, ctx: any): string {
+	return `${statusColor(ctx, "accent", "◆")} ${message}`;
+}
+
+function thinkingStatus(level: string, degraded: boolean, ctx: any): string {
+	const levelText = statusColor(ctx, "dim", `· ${level}`);
+	const degradedText = degraded ? ` ${statusColor(ctx, "warning", "· degraded")}` : "";
+	return `${statusColor(ctx, "accent", "◆")} Thinking ${levelText}${degradedText}`;
+}
+
+function degradedStatus(ctx: any): string {
+	return statusColor(ctx, "warning", "◇ Router degraded");
 }
 
 interface PendingRoutedTurn {
@@ -153,7 +173,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		refreshRouterSettingsFromStore();
 		config = refreshActiveRouterModel({ ...config, state });
 		saveRouterSettings();
-		ctx.ui.setStatus("pi-router", routerIdleStatus(config.state));
+		ctx.ui.setStatus("pi-router", routerIdleStatus(config.state, ctx));
 	}
 
 	async function setLocalMode(localMode: RouterConfig["localMode"], ctx: any) {
@@ -212,7 +232,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 
 	pi.on("session_start", async (_event, ctx) => {
 		refreshRouterSettingsFromStore();
-		ctx.ui.setStatus("pi-router", routerIdleStatus(config.state));
+		ctx.ui.setStatus("pi-router", routerIdleStatus(config.state, ctx));
 	});
 
 	pi.on("message_end", async (event, ctx) => {
@@ -292,16 +312,16 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			const startInterval = dependencies.setInterval ?? setInterval;
 			const stopInterval = dependencies.clearInterval ?? clearInterval;
 			let workingMessage = pickPhrase(phrases);
-			ctx.ui.setStatus("pi-router", `◆ ${workingMessage}`);
+			ctx.ui.setStatus("pi-router", promptPreparationStatus(workingMessage, ctx));
 			const phraseInterval = startInterval(() => {
 				workingMessage = pickPhrase(phrases, workingMessage);
-				ctx.ui.setStatus("pi-router", `◆ ${workingMessage}`);
+				ctx.ui.setStatus("pi-router", promptPreparationStatus(workingMessage, ctx));
 			}, 2_000);
 			try {
 				prepared = await prepare();
 			} finally {
 				stopInterval(phraseInterval);
-				ctx.ui.setStatus("pi-router", routerIdleStatus("on"));
+				ctx.ui.setStatus("pi-router", routerIdleStatus("on", ctx));
 			}
 		} else {
 			prepared = await prepare();
@@ -313,7 +333,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		if (prepared.action === "handled") {
 			pi.appendEntry("pi-router-details", prepared.details);
 			ctx.ui.notify(prepared.message, "warning");
-			ctx.ui.setStatus("pi-router", "◇ Router degraded");
+			ctx.ui.setStatus("pi-router", degradedStatus(ctx));
 			return { action: "handled" };
 		}
 
@@ -326,7 +346,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		if (prepared.warning) {
 			ctx.ui.notify(prepared.warning, "warning");
 		}
-		ctx.ui.setStatus("pi-router", `◆ Thinking · ${prepared.result.thinkingLevel}${prepared.warning ? " · degraded" : ""}`);
+		ctx.ui.setStatus("pi-router", thinkingStatus(prepared.result.thinkingLevel, Boolean(prepared.warning), ctx));
 		return { action: "transform", text: prepared.prompt };
 	});
 }

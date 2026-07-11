@@ -4,6 +4,11 @@ import { DEFAULT_ROUTER_CONFIG } from "../src/config.ts";
 import piRouterExtension, { installPiRouter, pickPromptPreparationPhrase } from "../src/index.ts";
 
 const DEFAULT_TEST_CONFIG = DEFAULT_ROUTER_CONFIG;
+const TEST_THEME = {
+	fg(color: string, text: string) {
+		return `<${color}>${text}</${color}>`;
+	},
+};
 
 it("selects a different prompt-preparation phrase when alternatives exist", () => {
 	assert.equal(
@@ -36,6 +41,7 @@ describe("pi-router extension entrypoint", () => {
 
 		const ctx = {
 			ui: {
+				theme: TEST_THEME,
 				notify(message: string) {
 					notifications.push(message);
 				},
@@ -49,7 +55,7 @@ describe("pi-router extension entrypoint", () => {
 		await commands.get("router")!.handler("", ctx);
 
 		assert.deepEqual(inputResult, { action: "continue" });
-		assert.deepEqual(statuses, [["pi-router", "◇ Router off"]]);
+		assert.deepEqual(statuses, [["pi-router", "<muted>◇ Router off</muted>"]]);
 		assert.deepEqual(notifications, [
 			"router:off local:on routerModel:llama-cpp/gemma4 workModel:unknown",
 		]);
@@ -67,7 +73,7 @@ describe("pi-router extension entrypoint", () => {
 			setThinkingLevel() {},
 			appendEntry() {},
 		};
-		const ctx = { ui: { notify() {}, setStatus(name: string, value?: string) { statuses.push([name, value]); } } };
+		const ctx = { ui: { theme: TEST_THEME, notify() {}, setStatus(name: string, value?: string) { statuses.push([name, value]); } } };
 
 		installPiRouter(pi as any, {
 			routePrompt: () => new Promise((resolve) => { finishRouting = resolve; }),
@@ -84,11 +90,11 @@ describe("pi-router extension entrypoint", () => {
 		statuses.length = 0;
 
 		const inputPromise = handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
-		assert.deepEqual(statuses, [["pi-router", "◆ Untangling the prompt…"]]);
+		assert.deepEqual(statuses, [["pi-router", "<accent>◆</accent> Untangling the prompt…"]]);
 		assert.equal(intervals[0].delay, 2_000);
 
 		intervals[0].callback();
-		assert.deepEqual(statuses.at(-1), ["pi-router", "◆ Packing the context…"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "<accent>◆</accent> Packing the context…"]);
 
 		finishRouting({
 			englishPrompt: "Improve the router.",
@@ -99,7 +105,7 @@ describe("pi-router extension entrypoint", () => {
 		await inputPromise;
 
 		assert.equal(intervals[0].cleared, true);
-		assert.deepEqual(statuses.at(-1), ["pi-router", "◆ Thinking · medium"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "<accent>◆</accent> Thinking <dim>· medium</dim>"]);
 	});
 
 	it("clears prompt-preparation feedback when routing throws", async () => {
@@ -111,7 +117,7 @@ describe("pi-router extension entrypoint", () => {
 			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
 			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
 		};
-		const ctx = { ui: { notify() {}, setStatus(name: string, value?: string) { statuses.push([name, value]); } } };
+		const ctx = { ui: { theme: TEST_THEME, notify() {}, setStatus(name: string, value?: string) { statuses.push([name, value]); } } };
 
 		installPiRouter(pi as any, {
 			routePrompt: async () => { throw new Error("router unavailable"); },
@@ -127,7 +133,7 @@ describe("pi-router extension entrypoint", () => {
 			/router unavailable/,
 		);
 
-		assert.deepEqual(statuses.at(-1), ["pi-router", "◆ Router on"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "<accent>◆</accent> Router on"]);
 		assert.equal(interval.cleared, true);
 	});
 
@@ -586,7 +592,7 @@ describe("pi-router extension entrypoint", () => {
 			appendEntry() {},
 			setThinkingLevel() {},
 		};
-		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus(name: string, value: string) { statuses.push([name, value]); } } };
+		const ctx = { ui: { theme: TEST_THEME, notify(message: string) { notifications.push(message); }, setStatus(name: string, value: string) { statuses.push([name, value]); } } };
 
 		installPiRouter(pi as any, {
 			config: { ...DEFAULT_TEST_CONFIG, routerModel: { ...DEFAULT_TEST_CONFIG.routerModel, fallbackMode: "error" } },
@@ -604,7 +610,7 @@ describe("pi-router extension entrypoint", () => {
 
 		assert.deepEqual(result, { action: "handled" });
 		assert.match(notifications.at(-1)!, /router model unavailable: timeout/);
-		assert.deepEqual(statuses.at(-1), ["pi-router", "◇ Router degraded"]);
+		assert.deepEqual(statuses.at(-1), ["pi-router", "<warning>◇ Router degraded</warning>"]);
 	});
 
 	it("shows immediate prompt-preparation status before waiting for the router model", async () => {

@@ -25,3 +25,22 @@ The router SHALL keep operational details available through router commands, not
 #### Scenario: User requests router details
 - **WHEN** the user runs `/router`
 - **THEN** the router reports enabled state, local mode, router model, and work model through its notification without replacing the concise footer format
+
+### Requirement: Theme-aware semantic status colors
+The router SHALL use Pi theme colors to emphasize status semantics without embedding fixed ANSI color values.
+
+#### Scenario: Active prompt preparation
+- **WHEN** a prompt-preparation phrase is displayed
+- **THEN** the active `◆` symbol uses the theme accent color and the phrase remains in the normal text color
+
+#### Scenario: Active reasoning
+- **WHEN** a reasoning status is displayed
+- **THEN** the active `◆` symbol uses the theme accent color and the `· <level>` value uses the theme dim color
+
+#### Scenario: Router is disabled
+- **WHEN** `◇ Router off` is displayed
+- **THEN** the complete status uses the theme muted color
+
+#### Scenario: Router is degraded
+- **WHEN** a degraded router status is displayed
+- **THEN** the degraded symbol and label use the theme warning color
