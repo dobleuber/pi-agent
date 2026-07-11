@@ -810,7 +810,7 @@ describe("final answer translation", () => {
 		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, answer);
-		assert.match(result.degradedReason ?? "", /inline placeholder mismatch/);
+		assert.match(result.degradedReason ?? "", /placeholder mismatch/);
 	});
 
 	it("preserves inline commands instead of leaking malformed placeholder suffixes", async () => {

@@ -1,5 +1,6 @@
 import type { RouterModelConfig } from "./config.ts";
 import { assistantText, completeWithPiRouterModel, shouldUsePiAi, userMessage, type PiAiRuntime } from "./pi-ai-client.ts";
+import { validatePlaceholderIntegrity } from "./placeholder-integrity.ts";
 import { maskProtectedSpans } from "./protected-text.ts";
 
 export interface FinalAnswerTranslationResult {
@@ -246,45 +247,14 @@ function finalizeTranslatedChunk(chunk: string, content: string, mode: "translat
 	if (spanishAnswer.includes(REPAIR_TEXT_BEGIN) || spanishAnswer.includes(REPAIR_TEXT_END)) {
 		return fallback(chunk, "final answer translation unavailable: echoed repair delimiter");
 	}
-	const inlinePlaceholderMismatch = validateInlinePlaceholders(chunk, spanishAnswer);
-	if (inlinePlaceholderMismatch) {
-		return fallback(chunk, `final answer translation unavailable: ${inlinePlaceholderMismatch}`);
+	const placeholderMismatch = validatePlaceholderIntegrity(chunk, spanishAnswer);
+	if (placeholderMismatch) {
+		return fallback(chunk, `final answer translation unavailable: ${placeholderMismatch}`);
 	}
 	if (spanishAnswer.trim() === chunk.trim()) {
 		return fallback(chunk, "final answer translation unavailable: untranslated output");
 	}
 	return { englishAnswer: chunk, spanishAnswer };
-}
-
-function validateInlinePlaceholders(input: string, output: string): string | null {
-	const expected = inlinePlaceholderMultiset(input);
-	const actual = inlinePlaceholderMultiset(output);
-	if (expected.size !== actual.size) {
-		return inlinePlaceholderMismatchMessage(expected, actual);
-	}
-	for (const [key, count] of expected) {
-		if (actual.get(key) !== count) {
-			return inlinePlaceholderMismatchMessage(expected, actual);
-		}
-	}
-	return null;
-}
-
-function inlinePlaceholderMultiset(text: string): Map<string, number> {
-	const placeholders = new Map<string, number>();
-	for (const match of text.matchAll(/_{0,2}PI_ROUTER_(?:INLINE|EN_LINEA)_(\d+)_{0,2}(?:\d+_{2})?/gi)) {
-		const key = `INLINE_${match[1]}`;
-		placeholders.set(key, (placeholders.get(key) ?? 0) + 1);
-	}
-	return placeholders;
-}
-
-function inlinePlaceholderMismatchMessage(expected: Map<string, number>, actual: Map<string, number>): string {
-	return `inline placeholder mismatch: expected ${formatPlaceholderMultiset(expected)}, got ${formatPlaceholderMultiset(actual)}`;
-}
-
-function formatPlaceholderMultiset(placeholders: Map<string, number>): string {
-	return `[${[...placeholders.entries()].map(([key, count]) => `${key}x${count}`).join(", ")}]`;
 }
 
 function splitFinalAnswerSegments(text: string): FinalAnswerSegment[] {
