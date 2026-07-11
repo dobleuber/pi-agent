@@ -1,12 +1,11 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_ROUTER_CONFIG, formatModel, resolveRouterModel, routerStatusSummary, type RouterConfig, type WorkModelInfo } from "./config.ts";
+import { DEFAULT_ROUTER_CONFIG, routerStatusSummary, type RouterConfig, type WorkModelInfo } from "./config.ts";
 import { extendRouterDetailsAfterCompletion, type RouterDetailsEntry } from "./details.ts";
 import { translateFinalAnswerToSpanish, type FinalAnswerTranslationResult } from "./final-answer.ts";
 import { shouldRouteInput } from "./input.ts";
 import { prepareRoutedPrompt, type PrepareRoutedPromptInput } from "./pipeline.ts";
 import { resolvePiRouterModel } from "./pi-ai-client.ts";
 import { routePromptWithModel } from "./router-model.ts";
-import { createLocalRouterLifecycle, type LocalRouterLifecycle } from "./local-lifecycle.ts";
 import { createFileRouterStateStore, type RouterStateStore } from "./state.ts";
 import { selectedWorkModelFromPiContext } from "./work-model.ts";
 
@@ -15,7 +14,6 @@ export interface PiRouterDependencies {
 	routePrompt?: PrepareRoutedPromptInput["routePrompt"];
 	translateFinalAnswer?: (answer: string, config: RouterConfig["routerModel"], ctx?: any) => Promise<FinalAnswerTranslationResult>;
 	stateStore?: RouterStateStore;
-	localLifecycle?: LocalRouterLifecycle;
 	promptPreparationPhrases?: readonly string[];
 	pickPromptPreparationPhrase?: (phrases: readonly string[], previous?: string) => string;
 	setInterval?: (callback: () => void, delay: number) => any;
@@ -137,10 +135,6 @@ function completeSkippedFinalAnswer(entry: RouterDetailsEntry, reason: string): 
 	});
 }
 
-function refreshActiveRouterModel(config: RouterConfig): RouterConfig {
-	return { ...config, routerModel: resolveRouterModel(config) };
-}
-
 function effectiveRouterModelFromContext(config: RouterConfig, ctx: any): WorkModelInfo | null {
 	if (config.routerModel.provider !== "openai-codex") {
 		return { provider: config.routerModel.provider, model: config.routerModel.model };
@@ -152,32 +146,22 @@ function effectiveRouterModelFromContext(config: RouterConfig, ctx: any): WorkMo
 	return resolved ? { provider: resolved.provider, model: resolved.id } : { provider: config.routerModel.provider, model: config.routerModel.model };
 }
 
-function remoteRouterModelLabel(config: RouterConfig, ctx: any): string {
-	const effectiveRouterModel = effectiveRouterModelFromContext(config, ctx);
-	return formatModel(effectiveRouterModel?.provider, effectiveRouterModel?.model);
-}
-
 export default function piRouterExtension(pi: ExtensionAPI) {
 	installPiRouter(pi, {});
 }
 
 export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependencies = {}) {
 	const stateStore = dependencies.stateStore ?? createFileRouterStateStore();
-	const localLifecycle = dependencies.localLifecycle ?? createLocalRouterLifecycle();
 	const initialConfig = dependencies.config ?? DEFAULT_ROUTER_CONFIG;
 	const pendingRoutedTurns: PendingRoutedTurn[] = [];
 
-	function loadPersistedConfig(): Partial<Pick<RouterConfig, "state" | "localMode">> {
+	function loadPersistedConfig(): Partial<Pick<RouterConfig, "state">> {
 		const persistedState = stateStore.loadState();
 		return typeof persistedState === "string" ? { state: persistedState } : (persistedState ?? {});
 	}
 
-	function configFromPersistedState(persistedConfig: Partial<Pick<RouterConfig, "state" | "localMode">>): RouterConfig {
-		const selectedLocalMode = (persistedConfig.localMode ?? initialConfig.localMode) as RouterConfig["localMode"];
-		const routerModels = dependencies.config?.routerModel
-			? { ...initialConfig.routerModels, [selectedLocalMode === "off" ? "remote" : "local"]: dependencies.config.routerModel }
-			: initialConfig.routerModels;
-		return refreshActiveRouterModel({ ...initialConfig, routerModels, ...persistedConfig });
+	function configFromPersistedState(persistedConfig: Partial<Pick<RouterConfig, "state">>): RouterConfig {
+		return { ...initialConfig, ...persistedConfig };
 	}
 
 	function refreshRouterSettingsFromStore() {
@@ -187,41 +171,18 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	let config: RouterConfig = configFromPersistedState(loadPersistedConfig());
 
 	function saveRouterSettings() {
-		stateStore.saveState({ state: config.state, localMode: config.localMode });
+		stateStore.saveState({ state: config.state });
 	}
 
 	function setRouterState(state: RouterConfig["state"], ctx: any) {
 		refreshRouterSettingsFromStore();
-		config = refreshActiveRouterModel({ ...config, state });
+		config = { ...config, state };
 		saveRouterSettings();
 		ctx.ui.setStatus("pi-router", routerIdleStatus(config.state, ctx));
 	}
 
-	async function setLocalMode(localMode: RouterConfig["localMode"], ctx: any) {
-		refreshRouterSettingsFromStore();
-		config = refreshActiveRouterModel({ ...config, localMode });
-		saveRouterSettings();
-		if (localMode === "on") {
-			const result = await localLifecycle.ensureRunning(config.routerModels.local);
-			if (result.status === "error") {
-				ctx.ui.notify(`Pi router local mode enabled; failed to start local llama.cpp router model: ${result.message ?? "unknown error"}`, "warning");
-				return;
-			}
-			const action = result.status === "started" ? "started local llama.cpp router model" : "local llama.cpp router model already running";
-			ctx.ui.notify(`Pi router local mode enabled; ${action}`, "info");
-			return;
-		}
-		const result = await localLifecycle.stop(config.routerModels.local);
-		const remoteModel = remoteRouterModelLabel(config, ctx);
-		if (result.status === "error") {
-			ctx.ui.notify(`Pi router local mode disabled; using remote ${remoteModel} router model; failed to stop local llama.cpp router model: ${result.message ?? "unknown error"}`, "warning");
-			return;
-		}
-		ctx.ui.notify(`Pi router local mode disabled; using remote ${remoteModel} router model`, "info");
-	}
-
 	pi.registerCommand("router", {
-		description: "Show or change Pi router status: /router, /router on, /router off, /router local on, /router local off",
+		description: "Show or change Pi router status: /router, /router on, /router off",
 		handler: async (args, ctx) => {
 			refreshRouterSettingsFromStore();
 			const command = args.trim().toLowerCase();
@@ -235,16 +196,8 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 				ctx.ui.notify("Pi router disabled", "info");
 				return;
 			}
-			if (command === "local on") {
-				await setLocalMode("on", ctx);
-				return;
-			}
-			if (command === "local off") {
-				await setLocalMode("off", ctx);
-				return;
-			}
 			if (command === "local" || command.startsWith("local ")) {
-				ctx.ui.notify(`router local:${config.localMode} usage:/router local on|off`, "info");
+				ctx.ui.notify("Local router mode has been removed; Pi Router always uses the remote GPT mini model.", "warning");
 				return;
 			}
 			ctx.ui.notify(routerStatusSummary({ config, effectiveRouterModel: effectiveRouterModelFromContext(config, ctx) }), "info");

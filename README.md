@@ -12,7 +12,7 @@ The live installation reviewed on 2026-07-11 is Pi `0.80.6` with CodeGraph `0.9.
 - Enabled model families: GPT-5.4/5.5, GLM-5.1/5 Turbo/5V Turbo, and MiniMax M2.7/M2.5.
 - Theme: `dark`.
 - External prompt and skill paths point to the separate `pi-extensions` checkout, plus Codex-managed skills under `~/.codex/skills`.
-- The tracked extension collection includes answer/context tools, review workflows, loop and todo controls, clipboard/file helpers, network retry, notifications, session breakdowns, Stratus support, and the local-model-aware Pi router.
+- The tracked extension collection includes answer/context tools, review workflows, loop and todo controls, clipboard/file helpers, network retry, notifications, session breakdowns, Stratus support, and the remote GPT-mini Pi router.
 
 The configured package list and installed package directory currently differ: `@spences10/pi-observability` is configured but was not reported by `pi list`, while `pi-mcp-adapter` was reported by `pi list` but is not configured in `settings.json`. Treat `settings.json` as the restore source of truth; reconcile this difference intentionally rather than copying package-cache state.
 

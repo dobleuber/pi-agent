@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { DEFAULT_ROUTER_CONFIG } from "../src/config.ts";
 import { translateFinalAnswerToSpanish } from "../src/final-answer.ts";
 
+const HTTP_TEST_MODEL = { ...DEFAULT_ROUTER_CONFIG.routerModel, provider: "test-http", model: "test-translator", baseUrl: "http://127.0.0.1:11434/v1" };
+
 function translationPayload(body: any): string {
 	return body.messages[0].content.match(/---BEGIN_PI_ROUTER_TRANSLATION_TEXT---\n([\s\S]*?)\n---END_PI_ROUTER_TRANSLATION_TEXT---/)?.[1] ?? "";
 }
@@ -20,11 +22,11 @@ describe("final answer translation", () => {
 
 		const result = await translateFinalAnswerToSpanish(
 			"Done. The changes are applied.",
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			fetchLike,
 		);
 
-		assert.equal(body.model, "gemma4");
+		assert.equal(body.model, "test-translator");
 		assert.equal(body.messages.length, 1);
 		assert.equal(body.messages[0].role, "user");
 		assert.match(body.messages[0].content, /BEGIN_PI_ROUTER_TRANSLATION_TEXT/);
@@ -45,7 +47,7 @@ describe("final answer translation", () => {
 
 		await translateFinalAnswerToSpanish(
 			"Done. The implementation is complete.",
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			fetchLike,
 		);
 
@@ -72,7 +74,7 @@ describe("final answer translation", () => {
 			};
 		};
 
-		await translateFinalAnswerToSpanish("Run `pytest tests/test_cli.py`.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		await translateFinalAnswerToSpanish("Run `pytest tests/test_cli.py`.", HTTP_TEST_MODEL, fetchLike);
 
 		assert.match(translatorPrompt, /Run __PI_ROUTER_INLINE_0__\./);
 		assert.doesNotMatch(translatorPrompt, /pytest tests\/test_cli\.py/);
@@ -84,7 +86,7 @@ describe("final answer translation", () => {
 			json: async () => ({ choices: [{ message: { content: "<SPANISH>Listo.</SPANISH><|im_end|>\n<|im_start|>assistant\nbasura" } }] }),
 		});
 
-		const result = await translateFinalAnswerToSpanish("Done.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish("Done.", HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, "Listo.");
 	});
@@ -95,7 +97,7 @@ describe("final answer translation", () => {
 			json: async () => ({ choices: [{ message: { content: "<TEXT>Done.</TEXT>" } }] }),
 		});
 
-		const result = await translateFinalAnswerToSpanish("Done.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish("Done.", HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, "Done.");
 		assert.equal(result.degradedReason, "final answer translation unavailable: echoed text payload");
@@ -107,7 +109,7 @@ describe("final answer translation", () => {
 			json: async () => ({ choices: [{ message: { content: "---BEGIN_PI_ROUTER_TRANSLATION_TEXT---\nListo.\n---END_PI_ROUTER_TRANSLATION_TEXT---" } }] }),
 		});
 
-		const result = await translateFinalAnswerToSpanish("Done.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish("Done.", HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, "Listo.");
 		assert.equal(result.degradedReason, undefined);
@@ -119,7 +121,7 @@ describe("final answer translation", () => {
 			json: async () => ({ choices: [{ message: { content: "---BEGIN_PI_ROUTER_TRANSLATION_TEXT---\nDone.\n---END_PI_ROUTER_TRANSLATION_TEXT---" } }] }),
 		});
 
-		const result = await translateFinalAnswerToSpanish("Done.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish("Done.", HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, "Done.");
 		assert.equal(result.degradedReason, "final answer translation unavailable: untranslated output");
@@ -131,7 +133,7 @@ describe("final answer translation", () => {
 			json: async () => ({ choices: [{ message: { content: "Done." } }] }),
 		});
 
-		const result = await translateFinalAnswerToSpanish("Done.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish("Done.", HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, "Done.");
 		assert.equal(result.degradedReason, "final answer translation unavailable: untranslated output");
@@ -145,7 +147,7 @@ describe("final answer translation", () => {
 		};
 		const answer = "Encontré la causa de las advertencias. Los cambios recientes no rompieron la traducción y la respuesta ya está en español.";
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike as any);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike as any);
 
 		assert.equal(calls, 0);
 		assert.equal(result.englishAnswer, answer);
@@ -170,7 +172,7 @@ describe("final answer translation", () => {
 		};
 		const answer = "This is now mature enough for an OpenSpec change such as:\n\nThe packs solve sourcing, but we still need to shape the change.";
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike as any);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike as any);
 
 		assert.equal(calls.length, 3);
 		assert.match(calls[2], /BEGIN_PI_ROUTER_REPAIR_TEXT/);
@@ -190,7 +192,7 @@ describe("final answer translation", () => {
 		};
 		const answer = "The first section is ready.\n\nThe second section is also ready.";
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike as any);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike as any);
 
 		assert.equal(calls, 2);
 		assert.doesNotMatch(result.spanishAnswer, /\bThe\b/);
@@ -209,7 +211,7 @@ describe("final answer translation", () => {
 		};
 		const answer = "This is now mature enough for an OpenSpec change such as:";
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike as any);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike as any);
 
 		assert.equal(calls, 2);
 		assert.equal(result.spanishAnswer, answer);
@@ -226,7 +228,7 @@ describe("final answer translation", () => {
 			};
 		};
 
-		await translateFinalAnswerToSpanish("Done. Literal </TEXT> marker.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		await translateFinalAnswerToSpanish("Done. Literal </TEXT> marker.", HTTP_TEST_MODEL, fetchLike);
 
 		assert.match(body.messages[0].content, /BEGIN_PI_ROUTER_TRANSLATION_TEXT/);
 		assert.match(body.messages[0].content, /Done\. Literal <\/TEXT> marker\./);
@@ -282,7 +284,7 @@ describe("final answer translation", () => {
 			"Done in `scenes/ui/hud.tscn`.",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(bodies.length, 5);
 		assert.match(translationPayload(bodies[0]), /^# HUD Review$/);
@@ -345,7 +347,7 @@ describe("final answer translation", () => {
 			"Next paragraph.",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, [
 			"Aquí está la tabla:",
@@ -390,7 +392,7 @@ describe("final answer translation", () => {
 		].join("\n");
 		const answer = ["Before the table.", "", asciiTable, "", "After the table."].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(bodies.length, 2);
 		assert.doesNotMatch(bodies.map(translationPayload).join("\n"), /MAIN VIEW|AMMO|LEFT THREAT|RIFLE READY/);
@@ -418,7 +420,7 @@ describe("final answer translation", () => {
 			"Second paragraph.",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(bodies.length, 2);
 		assert.doesNotMatch(translationPayload(bodies[0]), /keep me exact|PI_ROUTER_PRESERVED_BLOCK/);
@@ -484,7 +486,7 @@ describe("final answer translation", () => {
 			"This repo (`pi-agent`) only has Roger-related integration handling.",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(bodies.length, 6);
 		for (const body of bodies) {
@@ -521,7 +523,7 @@ describe("final answer translation", () => {
 			"```",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(bodies.length, 2);
 		assert.doesNotMatch(translationPayload(bodies[0]), /DIAGRAM A|DIAGRAM B|PI_ROUTER_PRESERVED_BLOCK/);
@@ -551,7 +553,7 @@ describe("final answer translation", () => {
 			};
 		};
 
-		const result = await translateFinalAnswerToSpanish("First paragraph.\n\nSecond paragraph.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish("First paragraph.\n\nSecond paragraph.", HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, "Primer párrafo.\n\nSecond paragraph.");
 		assert.match(result.degradedReason!, /chunk 2/);
@@ -591,7 +593,7 @@ describe("final answer translation", () => {
 			"One caveat: retry and scroll before failing clearly.",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(longAnswer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(longAnswer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.ok(calls.length >= 2, "expected multiple prose chunks around the fenced block");
 		assert.ok(calls.every((chunk) => chunk.length <= 1200), "expected fenced-block splitting to avoid oversized chunks");
@@ -610,7 +612,7 @@ describe("final answer translation", () => {
 			};
 		};
 
-		const result = await translateFinalAnswerToSpanish(longAnswer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(longAnswer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.ok(bodies.length > 1);
 		assert.equal(result.spanishAnswer, Array.from({ length: bodies.length }, (_, index) => `Fragmento ${index + 1}.`).join(""));
@@ -627,7 +629,7 @@ describe("final answer translation", () => {
 			};
 		};
 
-		await translateFinalAnswerToSpanish(input, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		await translateFinalAnswerToSpanish(input, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(body.max_tokens, 750);
 	});
@@ -656,7 +658,7 @@ describe("final answer translation", () => {
 			"└── final-answer.ts",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(calls, 1);
 		assert.equal(result.spanishAnswer, [
@@ -685,7 +687,7 @@ describe("final answer translation", () => {
 			};
 		};
 
-		const result = await translateFinalAnswerToSpanish(`Do not change ${path}.`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(`Do not change ${path}.`, HTTP_TEST_MODEL, fetchLike);
 
 		assert.doesNotMatch(body.messages[0].content, /add-roger-concurrent-interruption-listening/);
 		assert.match(body.messages[0].content, /§P0§/);
@@ -705,7 +707,7 @@ describe("final answer translation", () => {
 
 		const result = await translateFinalAnswerToSpanish(
 			"It can be installed/copied/symlinked in ~/.pi/agent/extensions/pi-router/.",
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			fetchLike,
 		);
 
@@ -720,7 +722,7 @@ describe("final answer translation", () => {
 			json: async () => ({ choices: [{ message: { content: "<SPANISH>El archivo §P0§ dice eso.</SPANISH>" } }] }),
 		});
 
-		const result = await translateFinalAnswerToSpanish(`The file ${path} says that.`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(`The file ${path} says that.`, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, `El archivo ${path} dice eso.`);
 	});
@@ -740,7 +742,7 @@ describe("final answer translation", () => {
 
 		const result = await translateFinalAnswerToSpanish(
 			`I only updated ${firstPath} and ${secondPath}.`,
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			fetchLike,
 		);
 
@@ -766,7 +768,7 @@ describe("final answer translation", () => {
 
 		const result = await translateFinalAnswerToSpanish(
 			`Changes made: ${firstPath} and ${secondPath}.`,
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			fetchLike,
 		);
 
@@ -805,7 +807,7 @@ describe("final answer translation", () => {
 			"- `pi-guardrail-policies`",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, answer);
 		assert.match(result.degradedReason ?? "", /inline placeholder mismatch/);
@@ -821,7 +823,7 @@ describe("final answer translation", () => {
 			};
 		};
 
-		const result = await translateFinalAnswerToSpanish("- `npm run build` ❌ missing script", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish("- `npm run build` ❌ missing script", HTTP_TEST_MODEL, fetchLike);
 
 		assert.doesNotMatch(body.messages[0].content, /npm run build/);
 		assert.match(body.messages[0].content, /__PI_ROUTER_INLINE_0__/);
@@ -835,7 +837,7 @@ describe("final answer translation", () => {
 				json: async () => ({ choices: [{ message: { content: `Véase __PI_ROUTER_INLINE_0__${suffix}.` } }] }),
 			});
 
-			const result = await translateFinalAnswerToSpanish("See `.pi/agent/test_file:33`.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+			const result = await translateFinalAnswerToSpanish("See `.pi/agent/test_file:33`.", HTTP_TEST_MODEL, fetchLike);
 
 			assert.equal(result.spanishAnswer, "Véase `.pi/agent/test_file:33`.");
 			assert.doesNotMatch(result.spanishAnswer, /\d+__/);
@@ -856,7 +858,7 @@ describe("final answer translation", () => {
 			"`zero` `one` `two` `three` `four` `five` `six` `seven` `eight` `runtime-policy-engine` and `agent-observability-evaluation`.",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, [
 			"Resultado:",
@@ -871,7 +873,7 @@ describe("final answer translation", () => {
 			json: async () => ({ choices: [{ message: { content: "Véase §P0§3__." } }] }),
 		});
 
-		const result = await translateFinalAnswerToSpanish("See .pi/agent/test_file:33.", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish("See .pi/agent/test_file:33.", HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, "Véase .pi/agent/test_file:33.");
 		assert.doesNotMatch(result.spanishAnswer, /3__/);
@@ -885,7 +887,7 @@ describe("final answer translation", () => {
 
 		const result = await translateFinalAnswerToSpanish(
 			"File: .pi/agent/extensions/pi-router/src/final-answer.ts. Literal example: `§P0§3__`.",
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			fetchLike,
 		);
 
@@ -908,7 +910,7 @@ describe("final answer translation", () => {
 			"- `.pi/agent/extensions/pi-router/src/index.ts:231-232`",
 		].join("\n");
 
-		const result = await translateFinalAnswerToSpanish(answer, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish(answer, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(bodies.length, 1);
 		assert.equal(result.degradedReason, undefined);
@@ -930,7 +932,7 @@ describe("final answer translation", () => {
 			].join("\n") } }] }),
 		});
 
-		const result = await translateFinalAnswerToSpanish("- Fibonacci:\n   - fibonacciRecursive\n   - fibonacciIterative", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await translateFinalAnswerToSpanish("- Fibonacci:\n   - fibonacciRecursive\n   - fibonacciIterative", HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.spanishAnswer, [
 			"- Fibonacci:",
@@ -942,7 +944,7 @@ describe("final answer translation", () => {
 	it("falls back visibly when translation fails or times out", async () => {
 		const result = await translateFinalAnswerToSpanish(
 			"Done.",
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			async () => { throw new Error("timeout"); },
 		);
 
@@ -955,7 +957,7 @@ describe("final answer translation", () => {
 		let fetched = false;
 		let completedModel: any;
 		let completedContext: any;
-		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModels.remote;
+		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModel;
 		const modelRegistry = {
 			find: (provider: string, model: string) => ({ provider, id: model, api: "openai-codex-responses" }) as any,
 			getApiKeyAndHeaders: async () => ({ ok: true as const, apiKey: "codex-oauth-token" }),

@@ -61,17 +61,6 @@ Rules:
 Required JSON keys: translation, sourceLanguage, thinkingLevel, translateFinalAnswer, usedConversationContext, resolvedReferences, unresolvedReferences.
 Allowed sourceLanguage: es, en, mixed, unknown. Allowed thinkingLevel: low, medium, high.`;
 
-const ROUTER_EXAMPLE_INPUT = { task: "Arregla los tests" };
-const ROUTER_EXAMPLE_OUTPUT = {
-	translation: "Fix the tests",
-	sourceLanguage: "es",
-	thinkingLevel: "medium",
-	translateFinalAnswer: true,
-	usedConversationContext: false,
-	resolvedReferences: [],
-	unresolvedReferences: [],
-};
-
 export function createRouterMetadata(input: {
 	originalPrompt: string;
 	result: RouterModelResult;
@@ -153,8 +142,6 @@ function buildRouterMessages(prompt: string, context: RouterContextOptions): Arr
 	const input = buildRouterInput(prompt, context);
 	return [
 		{ role: "system", content: ROUTER_SYSTEM_PROMPT },
-		{ role: "user", content: JSON.stringify(ROUTER_EXAMPLE_INPUT) },
-		{ role: "assistant", content: JSON.stringify(ROUTER_EXAMPLE_OUTPUT) },
 		{ role: "user", content: JSON.stringify(input) },
 	];
 }
@@ -163,14 +150,7 @@ function buildRouterPiAiContext(prompt: string, context: RouterContextOptions) {
 	const input = buildRouterInput(prompt, context);
 	return {
 		systemPrompt: ROUTER_SYSTEM_PROMPT,
-		messages: [userMessage([
-			"Example input:",
-			JSON.stringify(ROUTER_EXAMPLE_INPUT),
-			"Example JSON output:",
-			JSON.stringify(ROUTER_EXAMPLE_OUTPUT),
-			"Actual input:",
-			JSON.stringify(input),
-		].join("\n"))],
+		messages: [userMessage(JSON.stringify(input))],
 	};
 }
 
@@ -222,6 +202,9 @@ function normalizeRouterPayload(payload: any, originalPrompt: string, restorePro
 			? payload.englishPrompt.trim()
 			: originalPrompt;
 	const restoredPrompt = restoreProtectedSpans(translatedPrompt);
+	if (/^fix the tests[.!]?$/i.test(restoredPrompt) && !/\b(?:arregla|corrige|fix)\b[\s\S]*\btests?\b/i.test(originalPrompt)) {
+		return passthrough(originalPrompt, "router model leaked legacy example output");
+	}
 	const formattingLoss = promptFormattingLoss(originalPrompt, restoredPrompt);
 	if (formattingLoss) {
 		return {

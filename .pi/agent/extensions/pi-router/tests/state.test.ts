@@ -6,21 +6,18 @@ import { tmpdir } from "node:os";
 import { createFileRouterStateStore } from "../src/state.ts";
 
 describe("router state store", () => {
-	it("saves and restores router state and local mode", () => {
+	it("saves and restores only router enabled state", () => {
 		const path = join(mkdtempSync(join(tmpdir(), "pi-router-state-")), "router-state.json");
 		const store = createFileRouterStateStore(path);
-
-		store.saveState({ state: "on", localMode: "off" });
-
-		assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), { state: "on", localMode: "off" });
-		assert.deepEqual(store.loadState(), { state: "on", localMode: "off" });
+		store.saveState({ state: "on" });
+		assert.deepEqual(JSON.parse(readFileSync(path, "utf8")), { state: "on" });
+		assert.deepEqual(store.loadState(), { state: "on" });
 	});
 
-	it("loads old state files without local mode", () => {
+	it("ignores legacy localMode while preserving router state", () => {
 		const path = join(mkdtempSync(join(tmpdir(), "pi-router-state-")), "router-state.json");
-		writeFileSync(path, JSON.stringify({ state: "on" }), "utf8");
+		writeFileSync(path, JSON.stringify({ state: "on", localMode: "on" }), "utf8");
 		const store = createFileRouterStateStore(path);
-
 		assert.deepEqual(store.loadState(), { state: "on" });
 	});
 });
