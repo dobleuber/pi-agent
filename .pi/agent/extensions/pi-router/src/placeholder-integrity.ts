@@ -1,6 +1,8 @@
 type PlaceholderKind = "INLINE" | "PROTECTED" | "PRESERVED_BLOCK";
 
 export function validatePlaceholderIntegrity(input: string, output: string): string | null {
+	const malformed = output.match(/§P\d+§\d+__|_{0,2}PI_ROUTER_(?:INLINE|EN_LINEA|PRESERV(?:ED|ADO)_BLOCK)_\d+__\d+__/i)?.[0];
+	if (malformed) return `malformed placeholder: ${malformed}`;
 	const expected = placeholderMultiset(input);
 	const actual = placeholderMultiset(output);
 	if (expected.size === actual.size && [...expected].every(([key, count]) => actual.get(key) === count)) {

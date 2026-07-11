@@ -78,6 +78,26 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(result.messages, messages);
 	});
 
+	it("restores duplicate Spanish answers by assistant timestamp", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const pi = { registerCommand() {}, on(event: string, handler: any) { handlers.set(event, [handler]); } };
+		const messages = [
+			{ role: "assistant", timestamp: 101, content: [{ type: "text", text: "Listo." }] },
+			{ role: "assistant", timestamp: 202, content: [{ type: "text", text: "Listo." }] },
+		];
+		const detail = (assistantTimestamp: number, englishAnswer: string) => ({
+			type: "custom", customType: "pi-router-details",
+			data: { phase: "complete", details: { assistantTimestamp, englishAnswer, spanishAnswer: "Listo." } },
+		});
+		const ctx = { sessionManager: { getBranch: () => [detail(101, "Done."), detail(202, "Ready.")] } };
+
+		installPiRouter(pi as any, { stateStore: { loadState: () => undefined, saveState() {} } });
+		const result = await handlers.get("context")![0]({ messages }, ctx);
+
+		assert.equal(result.messages[0].content[0].text, "Done.");
+		assert.equal(result.messages[1].content[0].text, "Ready.");
+	});
+
 	it("registers a router status command and session status indicator", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
@@ -256,6 +276,11 @@ describe("pi-router extension entrypoint", () => {
 
 		await handlers.get("input")![0]({ text: "mejora otra cosa", source: "interactive" }, ctx);
 		await handlers.get("message_end")![0]({ message: { role: "assistant", content: [{ type: "text", text: "" }] } }, ctx);
+		assert.equal(appended.at(-1)![1].phase, "complete");
+		assert.match(appended.at(-1)![1].details.fallbackEvents[0], /empty answer/);
+
+		await handlers.get("input")![0]({ text: "mejora una tercera cosa", source: "interactive" }, ctx);
+		await handlers.get("message_end")![0]({ message: { role: "assistant", content: "" } }, ctx);
 		assert.equal(appended.at(-1)![1].phase, "complete");
 		assert.match(appended.at(-1)![1].details.fallbackEvents[0], /empty answer/);
 	});

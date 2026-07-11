@@ -835,7 +835,7 @@ describe("final answer translation", () => {
 		assert.equal(result.spanishAnswer, "- `npm run build` ❌ script faltante");
 	});
 
-	it("repairs inline placeholders with malformed numeric suffixes", async () => {
+	it("rejects inline placeholders with malformed numeric suffixes", async () => {
 		for (const suffix of ["0__", "3__"]) {
 			const fetchLike = async () => ({
 				ok: true,
@@ -844,8 +844,8 @@ describe("final answer translation", () => {
 
 			const result = await translateFinalAnswerToSpanish("See `.pi/agent/test_file:33`.", HTTP_TEST_MODEL, fetchLike);
 
-			assert.equal(result.spanishAnswer, "Véase `.pi/agent/test_file:33`.");
-			assert.doesNotMatch(result.spanishAnswer, /\d+__/);
+			assert.equal(result.spanishAnswer, "See `.pi/agent/test_file:33`.");
+			assert.match(result.degradedReason ?? "", /malformed placeholder/);
 		}
 	});
 
@@ -872,7 +872,7 @@ describe("final answer translation", () => {
 		].join("\n"));
 	});
 
-	it("repairs protected path placeholders with malformed suffixes outside inline code", async () => {
+	it("rejects protected path placeholders with malformed suffixes outside inline code", async () => {
 		const fetchLike = async () => ({
 			ok: true,
 			json: async () => ({ choices: [{ message: { content: "Véase §P0§3__." } }] }),
@@ -880,8 +880,8 @@ describe("final answer translation", () => {
 
 		const result = await translateFinalAnswerToSpanish("See .pi/agent/test_file:33.", HTTP_TEST_MODEL, fetchLike);
 
-		assert.equal(result.spanishAnswer, "Véase .pi/agent/test_file:33.");
-		assert.doesNotMatch(result.spanishAnswer, /3__/);
+		assert.equal(result.spanishAnswer, "See .pi/agent/test_file:33.");
+		assert.match(result.degradedReason ?? "", /malformed placeholder/);
 	});
 
 	it("preserves literal protected-placeholder examples inside inline code", async () => {

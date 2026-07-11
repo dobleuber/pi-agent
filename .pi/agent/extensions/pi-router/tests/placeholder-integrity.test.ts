@@ -20,4 +20,9 @@ describe("placeholder integrity", () => {
 			"Antes __PI_ROUTER_PRESERVED_BLOCK_0__ __PI_ROUTER_PRESERVED_BLOCK_0__ después",
 		) ?? "", /placeholder mismatch/);
 	});
+
+	it("rejects malformed numeric placeholder suffixes", () => {
+		assert.match(validatePlaceholderIntegrity("§P0§", "§P0§3__") ?? "", /malformed placeholder/);
+		assert.match(validatePlaceholderIntegrity("__PI_ROUTER_INLINE_0__", "__PI_ROUTER_INLINE_0__0__") ?? "", /malformed placeholder/);
+	});
 });

@@ -17,8 +17,9 @@ The router SHALL restore recorded English assistant answers in the non-destructi
 - **THEN** the router leaves that context message unchanged
 
 #### Scenario: Multiple details or messages share the same Spanish text
-- **WHEN** text-only legacy matching would associate more than one completed detail or assistant message
-- **THEN** the router leaves those context messages unchanged instead of applying an ambiguous English answer
+- **WHEN** completed details and assistant messages have persisted assistant timestamps
+- **THEN** the router restores each English answer by timestamp
+- **AND** when legacy entries lack timestamps and text-only matching is ambiguous, it leaves those context messages unchanged
 
 #### Scenario: Final answer does not require translation
 - **WHEN** a routed turn completes with `translateFinalAnswer: false`

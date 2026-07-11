@@ -5,6 +5,7 @@ export type RouterDetailsPhase = "pre-dispatch" | "complete";
 
 export interface RouterDetails {
 	turnId?: string;
+	assistantTimestamp?: number;
 	originalPrompt: string;
 	transformedPrompt: string;
 	sourceLanguage: string;
@@ -27,6 +28,7 @@ export interface RouterDetailsEntry {
 
 export interface CompletedRouterDetails {
 	englishAnswer: string;
+	assistantTimestamp?: number;
 	spanishAnswer: string;
 	effectiveThinkingLevel?: string;
 	fallbackEvents?: string[];
@@ -66,6 +68,7 @@ export function extendRouterDetailsAfterCompletion(
 			...entry.details,
 			englishAnswer: completion.englishAnswer,
 			spanishAnswer: completion.spanishAnswer,
+			...(completion.assistantTimestamp !== undefined ? { assistantTimestamp: completion.assistantTimestamp } : {}),
 			...(completion.effectiveThinkingLevel ? { effectiveThinkingLevel: completion.effectiveThinkingLevel } : {}),
 			...(completion.fallbackEvents ? { fallbackEvents: completion.fallbackEvents } : {}),
 		},

@@ -79,14 +79,6 @@ function extractSingleTextContent(content: unknown): string | null {
 	return null;
 }
 
-function hasPotentialFinalAnswerText(content: unknown): boolean {
-	if (typeof content === "string") return content.trim().length > 0;
-	if (Array.isArray(content)) {
-		return content.some((part) => part && typeof part === "object" && (part as any).type === "text");
-	}
-	return false;
-}
-
 function hasToolCallContent(content: unknown): boolean {
 	return Array.isArray(content) && content.some((part) => part && typeof part === "object" && (part as any).type === "toolCall");
 }
@@ -107,13 +99,19 @@ function replaceTextContent(content: unknown, text: string): unknown {
 }
 
 function restoreEnglishAssistantContext(messages: any[], branch: any[]): any[] {
+	const answersByTimestamp = new Map<number, string>();
 	const answersBySpanish = new Map<string, string[]>();
 	for (const entry of branch) {
 		if (entry?.type !== "custom" || entry.customType !== "pi-router-details" || entry.data?.phase !== "complete") continue;
 		const english = entry.data.details?.englishAnswer;
 		const spanish = entry.data.details?.spanishAnswer;
+		const assistantTimestamp = entry.data.details?.assistantTimestamp;
 		if (typeof english !== "string" || typeof spanish !== "string" || english === spanish) continue;
-		answersBySpanish.set(spanish, [...(answersBySpanish.get(spanish) ?? []), english]);
+		if (typeof assistantTimestamp === "number") {
+			answersByTimestamp.set(assistantTimestamp, english);
+		} else {
+			answersBySpanish.set(spanish, [...(answersBySpanish.get(spanish) ?? []), english]);
+		}
 	}
 	const assistantCounts = new Map<string, number>();
 	for (const message of messages) {
@@ -124,6 +122,12 @@ function restoreEnglishAssistantContext(messages: any[], branch: any[]): any[] {
 
 	return messages.map((message) => {
 		if (message?.role !== "assistant") return message;
+		if (typeof message.timestamp === "number") {
+			const timestampAnswer = answersByTimestamp.get(message.timestamp);
+			if (timestampAnswer !== undefined) {
+				return { ...message, content: replaceTextContent(message.content, timestampAnswer) };
+			}
+		}
 		const spanish = extractSingleTextContent(message.content);
 		if (spanish === null || assistantCounts.get(spanish) !== 1) return message;
 		const englishAnswers = answersBySpanish.get(spanish);
@@ -132,10 +136,11 @@ function restoreEnglishAssistantContext(messages: any[], branch: any[]): any[] {
 	});
 }
 
-function completeSkippedFinalAnswer(entry: RouterDetailsEntry, reason: string): RouterDetailsEntry {
+function completeSkippedFinalAnswer(entry: RouterDetailsEntry, reason: string, assistantTimestamp?: number): RouterDetailsEntry {
 	return extendRouterDetailsAfterCompletion(entry, {
 		englishAnswer: "",
 		spanishAnswer: "",
+		assistantTimestamp,
 		fallbackEvents: [reason],
 	});
 }
@@ -228,9 +233,6 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		if (hasToolCallContent(event.message.content)) {
 			return;
 		}
-		if (!hasPotentialFinalAnswerText(event.message.content)) {
-			return;
-		}
 		const pendingTurn = pendingRoutedTurns.shift();
 		if (!pendingTurn) {
 			return;
@@ -239,17 +241,18 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		const shouldTranslateFinalAnswer = pendingTurn.shouldTranslateFinalAnswer;
 		const englishAnswer = extractSingleTextContent(event.message.content);
 		if (englishAnswer === null) {
-			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: unsupported message content"));
+			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: unsupported message content", event.message.timestamp));
 			return;
 		}
 		if (!englishAnswer.trim()) {
-			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: empty answer"));
+			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: empty answer", event.message.timestamp));
 			return;
 		}
 		if (!shouldTranslateFinalAnswer) {
 			pi.appendEntry("pi-router-details", extendRouterDetailsAfterCompletion(detailsForTurn, {
 				englishAnswer,
 				spanishAnswer: englishAnswer,
+				assistantTimestamp: event.message.timestamp,
 				effectiveThinkingLevel: typeof (pi as any).getThinkingLevel === "function" ? (pi as any).getThinkingLevel() : undefined,
 			}));
 			return;
@@ -260,6 +263,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		const completedDetails = extendRouterDetailsAfterCompletion(detailsForTurn, {
 			englishAnswer: translated.englishAnswer,
 			spanishAnswer: translated.spanishAnswer,
+			assistantTimestamp: event.message.timestamp,
 			effectiveThinkingLevel: typeof (pi as any).getThinkingLevel === "function" ? (pi as any).getThinkingLevel() : undefined,
 			fallbackEvents: translated.degradedReason ? [translated.degradedReason] : undefined,
 		});
