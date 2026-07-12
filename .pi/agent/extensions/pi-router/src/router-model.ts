@@ -249,10 +249,10 @@ function parseThinkingLevel(value: unknown): ThinkingLevel {
 function parseAdvisoryFields(payload: any): Partial<RouterModelResult> {
 	return {
 		thinkingReason: typeof payload?.thinkingReason === "string" ? payload.thinkingReason : "router advisory",
-		taskComplexity: parseEnum(payload?.taskComplexity, ["trivial", "routine", "moderate", "complex", "difficult"], "unknown"),
-		taskRisk: parseEnum(payload?.taskRisk, ["low", "medium", "high"], "unknown"),
+		taskComplexity: parseEnum<TaskComplexity>(payload?.taskComplexity, ["trivial", "routine", "moderate", "complex", "difficult"], "unknown"),
+		taskRisk: parseEnum<TaskRisk>(payload?.taskRisk, ["low", "medium", "high"], "unknown"),
 		expectedWorkflow: typeof payload?.expectedWorkflow === "string" ? payload.expectedWorkflow : "unknown",
-		suggestedWorkModelTier: parseEnum(payload?.suggestedWorkModelTier, ["luna", "terra", "sol"], "terra"),
+		suggestedWorkModelTier: parseEnum<WorkModelTier>(payload?.suggestedWorkModelTier, ["luna", "terra", "sol"], "terra"),
 		parallelizable: payload?.parallelizable === true,
 		parallelizationReason: typeof payload?.parallelizationReason === "string" ? payload.parallelizationReason : "not provided",
 	};

@@ -30,7 +30,7 @@ export async function completeWithPiRouterModel(
 
 	const auth = await modelRegistry.getApiKeyAndHeaders(model);
 	if (!auth.ok) {
-		throw new Error(auth.error);
+		throw new Error((auth as { ok: false; error: string }).error);
 	}
 
 	return (runtime.complete ?? complete)(model, context, {

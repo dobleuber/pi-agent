@@ -7,6 +7,7 @@ import { prepareRoutedPrompt, type PrepareRoutedPromptInput } from "./pipeline.t
 import { resolvePiRouterModel } from "./pi-ai-client.ts";
 import { routePromptWithModel } from "./router-model.ts";
 import { createFileRouterStateStore, type RouterStateStore } from "./state.ts";
+import { parseThinkingOverride, resolveWorkProfile } from "./thinking.ts";
 import { selectedWorkModelFromPiContext } from "./work-model.ts";
 
 export interface PiRouterDependencies {
@@ -234,16 +235,18 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		if (event.message?.role !== "assistant") {
 			return;
 		}
-		if (hasToolCallContent(event.message.content)) {
-			return;
-		}
+		if (hasToolCallContent(event.message.content)) return;
+		const phase = (event.message as any).phase;
+		if (phase && phase !== "final_answer") return;
+		const supportedText = extractSingleTextContent(event.message.content);
+		if (!phase && (supportedText === null || !supportedText.trim())) return;
 		const pendingTurn = pendingRoutedTurns.shift();
 		if (!pendingTurn) {
 			return;
 		}
 		const detailsForTurn = pendingTurn.details;
 		const shouldTranslateFinalAnswer = pendingTurn.shouldTranslateFinalAnswer;
-		const englishAnswer = extractSingleTextContent(event.message.content);
+		const englishAnswer = supportedText;
 		if (englishAnswer === null) {
 			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: unsupported message content", event.message.timestamp));
 			return;
@@ -294,8 +297,13 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			return { action: "continue" };
 		}
 
+		const override = parseThinkingOverride(event.text);
+		if (override.error) {
+			ctx.ui.notify(override.error, "warning");
+			return { action: "handled" };
+		}
 		const prepare = () => prepareRoutedPrompt({
-				prompt: event.text,
+				prompt: override.prompt,
 				config,
 				workModel: selectedWorkModelFromPiContext(ctx),
 				routePrompt: dependencies.routePrompt
@@ -334,20 +342,56 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			return { action: "handled" };
 		}
 
-		pi.setThinkingLevel(prepared.result.thinkingLevel);
+		const current = selectedWorkModelFromPiContext(ctx);
+		const currentModel = current.provider && current.model ? `${current.provider}/${current.model}` : "unknown";
+		const activeTools = typeof (pi as any).getActiveTools === "function" ? (pi as any).getActiveTools() : (ctx as any)?.tools ?? [];
+		const subagentToolsAvailable = Array.isArray(activeTools) && activeTools.some((tool: any) => /subagent|delegate|parallel/i.test(typeof tool === "string" ? tool : tool?.name ?? ""));
+		const profile = resolveWorkProfile({ prompt: event.text, currentModel, advisory: prepared.result, subagentToolsAvailable });
+		const fallbackEvents: string[] = [...(prepared.details.details.fallbackEvents ?? [])];
+		let effectiveModel = currentModel;
+		if (profile.modelRouting === "managed-family" && profile.selectedModel !== currentModel) {
+			const [provider, model] = profile.selectedModel.split("/", 2);
+			const resolved = ctx?.modelRegistry?.find?.(provider, model);
+			if (!resolved) {
+				const warning = `Pi router model fallback: ${profile.selectedModel} unavailable.`;
+				fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
+			} else try {
+				await (pi as any).setModel(resolved); effectiveModel = `${resolved.provider}/${resolved.id}`;
+			} catch (error) {
+				const warning = `Pi router model fallback: ${String(error)}`;
+				fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
+			}
+		}
+		(pi as any).setThinkingLevel(profile.requestedThinkingLevel);
+		const effectiveThinkingLevel = typeof (pi as any).getThinkingLevel === "function" ? (pi as any).getThinkingLevel() : profile.requestedThinkingLevel;
+		if (effectiveThinkingLevel !== profile.requestedThinkingLevel) {
+			const warning = `Pi router adjusted thinking ${profile.requestedThinkingLevel} to ${effectiveThinkingLevel}.`;
+			fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
+		}
+		if (profile.executionFallbackReason) { fallbackEvents.push(profile.executionFallbackReason); ctx.ui.notify(profile.executionFallbackReason, "warning"); }
 		const detailsForTurn: RouterDetailsEntry = {
 			...prepared.details,
-			details: { ...prepared.details.details, turnId: `router-turn-${nextTurnId++}` },
+			details: { ...prepared.details.details, turnId: `router-turn-${nextTurnId++}`,
+				requestedThinkingLevel: profile.requestedThinkingLevel, effectiveThinkingLevel,
+				advisoryThinkingLevel: profile.advisoryThinkingLevel, thinkingReason: profile.reason,
+				policySelectedModel: profile.selectedModel, effectiveModel, modelRouting: profile.modelRouting,
+				executionMode: profile.executionMode, requestedExecutionMode: profile.requestedExecutionMode,
+				normalizedSignals: profile.signals, overrideSource: profile.overrideSource,
+				thinkingWasClamped: effectiveThinkingLevel !== profile.requestedThinkingLevel,
+				...(fallbackEvents.length ? { fallbackEvents } : {}) },
 		};
 		pendingRoutedTurns.push({
 			details: detailsForTurn,
-			shouldTranslateFinalAnswer: prepared.result.translateFinalAnswer,
+			shouldTranslateFinalAnswer: prepared.result.sourceLanguage === "es" || prepared.result.sourceLanguage === "mixed" ? true : prepared.result.translateFinalAnswer,
 		});
 		pi.appendEntry("pi-router-details", detailsForTurn);
 		if (prepared.warning) {
 			ctx.ui.notify(prepared.warning, "warning");
 		}
-		ctx.ui.setStatus("pi-router", thinkingStatus(prepared.result.thinkingLevel, Boolean(prepared.warning), ctx));
-		return { action: "transform", text: prepared.prompt };
+		ctx.ui.setStatus("pi-router", thinkingStatus(effectiveThinkingLevel, Boolean(prepared.warning || fallbackEvents.length), ctx));
+		const dispatchedPrompt = profile.executionMode === "parallel-agentic"
+			? `${prepared.prompt}\n\nExecution guidance: delegate only independent work units through active Pi subagent tools; keep dependent work local and bounded.`
+			: prepared.prompt;
+		return { action: "transform", text: dispatchedPrompt };
 	});
 }

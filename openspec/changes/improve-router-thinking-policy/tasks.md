@@ -18,36 +18,36 @@
 
 ## 3. Work-model and execution-mode application
 
-- [ ] 3.1 Add failing integration tests proving model routing activates only for the OpenAI Codex GPT-5.6 Luna/Terra/Sol family and preserves Stratus, ZAI, Anthropic, and other external models.
-- [ ] 3.2 Add failing tests for successful `modelRegistry` resolution and `pi.setModel()` application, plus unavailable-model and failed-switch fallbacks that preserve the current model and warn visibly.
-- [ ] 3.3 Apply the selected model before thinking effort, call `pi.setThinkingLevel()`, read `pi.getThinkingLevel()`, and persist requested/effective model and level values.
-- [ ] 3.4 Add failing tests for model capability clamping, including warning text and requested/effective diagnostics when Pi lowers an unsupported level.
-- [ ] 3.5 Implement separate `standard` and `parallel-agentic` execution modes; activate bounded subagent guidance only for independent parallelizable work with active Pi subagent tools.
-- [ ] 3.6 Add tests proving unavailable subagent tools fall back to `standard` without changing the selected model/effort profile and without labeling local delegation as Ultra.
-- [ ] 3.7 Keep `native-ultra` disabled unless the Pi runtime exposes an explicit native capability; add tests proving `max` and local subagent availability do not imply native Ultra.
+- [x] 3.1 Add failing integration tests proving model routing activates only for the OpenAI Codex GPT-5.6 Luna/Terra/Sol family and preserves Stratus, ZAI, Anthropic, and other external models.
+- [x] 3.2 Add failing tests for successful `modelRegistry` resolution and `pi.setModel()` application, plus unavailable-model and failed-switch fallbacks that preserve the current model and warn visibly.
+- [x] 3.3 Apply the selected model before thinking effort, call `pi.setThinkingLevel()`, read `pi.getThinkingLevel()`, and persist requested/effective model and level values.
+- [x] 3.4 Add failing tests for model capability clamping, including warning text and requested/effective diagnostics when Pi lowers an unsupported level.
+- [x] 3.5 Implement separate `standard` and `parallel-agentic` execution modes; activate bounded subagent guidance only for independent parallelizable work with active Pi subagent tools.
+- [x] 3.6 Add tests proving unavailable subagent tools fall back to `standard` without changing the selected model/effort profile and without labeling local delegation as Ultra.
+- [x] 3.7 Keep `native-ultra` disabled unless the Pi runtime exposes an explicit native capability; add tests proving `max` and local subagent availability do not imply native Ultra.
 
 ## 4. Router integration and observability
 
-- [ ] 4.1 Integrate original-prompt override parsing before translation, strip valid control syntax from the dispatched task, and block invalid controls with concise usage feedback.
-- [ ] 4.2 Replace direct `prepared.result.thinkingLevel` application in `src/index.ts` with the resolved model/effort/execution profile and confirmed effective values.
-- [ ] 4.3 Extend router details and status output with router suggestion, policy profile, effective model, requested/effective effort, execution mode, normalized signals, override source, clamp state, and fallback reasons.
-- [ ] 4.4 Preserve backward compatibility when loading historical detail entries that lack the new optional policy metadata.
-- [ ] 4.5 Add tests proving status and details describe decisions as quality-floor/cost-frontier choices and do not claim latency optimization without measured latency evidence.
+- [x] 4.1 Integrate original-prompt override parsing before translation, strip valid control syntax from the dispatched task, and block invalid controls with concise usage feedback.
+- [x] 4.2 Replace direct `prepared.result.thinkingLevel` application in `src/index.ts` with the resolved model/effort/execution profile and confirmed effective values.
+- [x] 4.3 Extend router details and status output with router suggestion, policy profile, effective model, requested/effective effort, execution mode, normalized signals, override source, clamp state, and fallback reasons.
+- [x] 4.4 Preserve backward compatibility when loading historical detail entries that lack the new optional policy metadata.
+- [x] 4.5 Add tests proving status and details describe decisions as quality-floor/cost-frontier choices and do not claim latency optimization without measured latency evidence.
 
 ## 5. Language and routed-turn correctness
 
-- [ ] 5.1 Add failing regression tests for `sourceLanguage: es|mixed` combined with `translateFinalAnswer: false`, including the real “respuesta con mucha variedad” case.
-- [ ] 5.2 Normalize Spanish and mixed turns to `translateFinalAnswer: true`, record contradictory router output, and preserve documented behavior for `en` and `unknown`.
-- [ ] 5.3 Add failing event-sequence tests covering commentary, reasoning-only content, tool calls, `final_answer`, phase-less text completion, and phase-less empty or unsupported content.
-- [ ] 5.4 Make commentary, reasoning, and tool-call events preserve the pending routed turn; consume exactly one turn only for an explicit final answer or the narrow phase-less compatibility case.
-- [ ] 5.5 Preserve assistant phase, timestamp, message identity, tool metadata, and non-text fields when translating visible final text or restoring English work-model context.
-- [ ] 5.6 Verify explicit empty/unsupported `final_answer` events complete diagnostically while phase-less empty/unsupported events remain pending for the real answer.
+- [x] 5.1 Add failing regression tests for `sourceLanguage: es|mixed` combined with `translateFinalAnswer: false`, including the real “respuesta con mucha variedad” case.
+- [x] 5.2 Normalize Spanish and mixed turns to `translateFinalAnswer: true`, record contradictory router output, and preserve documented behavior for `en` and `unknown`.
+- [x] 5.3 Add failing event-sequence tests covering commentary, reasoning-only content, tool calls, `final_answer`, phase-less text completion, and phase-less empty or unsupported content.
+- [x] 5.4 Make commentary, reasoning, and tool-call events preserve the pending routed turn; consume exactly one turn only for an explicit final answer or the narrow phase-less compatibility case.
+- [x] 5.5 Preserve assistant phase, timestamp, message identity, tool metadata, and non-text fields when translating visible final text or restoring English work-model context.
+- [x] 5.6 Verify explicit empty/unsupported `final_answer` events complete diagnostically while phase-less empty/unsupported events remain pending for the real answer.
 
 ## 6. Evaluation, documentation, and deployment
 
-- [ ] 6.1 Add a single table-driven evaluation fixture spanning bilingual trivial, routine, bounded-complex, difficult, security, exhaustive, contextual-follow-up, explicit override, contradictory classifier, external model, clamp, and execution-mode cases.
-- [ ] 6.2 Encode the saved official coding cost evidence for Luna Max, Terra Max, Sol XHigh, and Sol Max as policy rationale fixtures without asserting unmeasured latency claims.
-- [ ] 6.3 Update Pi Router documentation and status examples for adaptive model/effort routing, explicit overrides, `parallel-agentic`, disabled native Ultra, warnings, and rollback behavior.
-- [ ] 6.4 Run focused tests after every TDD slice, then run `npx tsc --noEmit`, the full test suite at least five consecutive times, `git diff --check`, and `openspec validate --all --strict`.
+- [x] 6.1 Add a single table-driven evaluation fixture spanning bilingual trivial, routine, bounded-complex, difficult, security, exhaustive, contextual-follow-up, explicit override, contradictory classifier, external model, clamp, and execution-mode cases.
+- [x] 6.2 Encode the saved official coding cost evidence for Luna Max, Terra Max, Sol XHigh, and Sol Max as policy rationale fixtures without asserting unmeasured latency claims.
+- [x] 6.3 Update Pi Router documentation and status examples for adaptive model/effort routing, explicit overrides, `parallel-agentic`, disabled native Ultra, warnings, and rollback behavior.
+- [x] 6.4 Run focused tests after every TDD slice, then run `npx tsc --noEmit`, the full test suite at least five consecutive times, `git diff --check`, and `openspec validate --all --strict`.
 - [ ] 6.5 Back up the active router outside extension discovery, deploy while preserving `router-state.json`, run TypeScript and the full suite against the active installation, and verify representative live prompts plus persisted detail metadata.
-- [ ] 6.6 Confirm `reports/` remains untouched, summarize residual risks including missing latency measurements and unavailable native Ultra, and do not push without explicit user approval.
+- [x] 6.6 Confirm `reports/` remains untouched, summarize residual risks including missing latency measurements and unavailable native Ultra, and do not push without explicit user approval.

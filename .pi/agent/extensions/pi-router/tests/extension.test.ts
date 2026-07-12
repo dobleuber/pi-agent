@@ -294,12 +294,12 @@ describe("pi-router extension entrypoint", () => {
 		assert.equal(appended.at(-1)![1].details.turnId, appended[0][1].details.turnId);
 
 		await handlers.get("input")![0]({ text: "mejora otra cosa", source: "interactive" }, ctx);
-		await handlers.get("message_end")![0]({ message: { role: "assistant", content: [{ type: "text", text: "" }] } }, ctx);
+		await handlers.get("message_end")![0]({ message: { role: "assistant", phase: "final_answer", content: [{ type: "text", text: "" }] } }, ctx);
 		assert.equal(appended.at(-1)![1].phase, "complete");
 		assert.match(appended.at(-1)![1].details.fallbackEvents[0], /empty answer/);
 
 		await handlers.get("input")![0]({ text: "mejora una tercera cosa", source: "interactive" }, ctx);
-		await handlers.get("message_end")![0]({ message: { role: "assistant", content: "" } }, ctx);
+		await handlers.get("message_end")![0]({ message: { role: "assistant", phase: "final_answer", content: "" } }, ctx);
 		assert.equal(appended.at(-1)![1].phase, "complete");
 		assert.match(appended.at(-1)![1].details.fallbackEvents[0], /empty answer/);
 	});
@@ -582,6 +582,7 @@ describe("pi-router extension entrypoint", () => {
 		const result = await handlers.get("message_end")![0]({
 			message: {
 				role: "assistant",
+				phase: "final_answer",
 				content: [
 					{ type: "text", text: "First part." },
 					{ type: "image", url: "file://screenshot.png" },
@@ -628,6 +629,7 @@ describe("pi-router extension entrypoint", () => {
 		const result = await handlers.get("message_end")![0]({
 			message: {
 				role: "assistant",
+				phase: "final_answer",
 				content: [{ type: "text", text: 42 }],
 			},
 		}, ctx);

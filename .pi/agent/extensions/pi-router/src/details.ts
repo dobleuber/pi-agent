@@ -16,6 +16,16 @@ export interface RouterDetails {
 	spanishAnswer?: string;
 	effectiveThinkingLevel?: string;
 	fallbackEvents?: string[];
+	advisoryThinkingLevel?: ThinkingLevel;
+	thinkingReason?: string;
+	policySelectedModel?: string;
+	effectiveModel?: string;
+	modelRouting?: "managed-family" | "preserved-external";
+	executionMode?: "standard" | "parallel-agentic" | "native-ultra";
+	requestedExecutionMode?: "standard" | "parallel-agentic" | "native-ultra";
+	normalizedSignals?: string[];
+	overrideSource?: string;
+	thinkingWasClamped?: boolean;
 }
 
 export interface RouterDetailsEntry {
