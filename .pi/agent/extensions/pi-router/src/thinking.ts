@@ -14,7 +14,7 @@ export interface ThinkingOverride { level?: ThinkingLevel; source?: "syntax" | "
 export interface WorkProfileDecision {
 	selectedModel: string; requestedThinkingLevel: ThinkingLevel; executionMode: ExecutionMode;
 	requestedExecutionMode: ExecutionMode; modelRouting: "managed-family" | "preserved-external";
-	reason: string; signals: string[]; overrideSource?: string; advisoryThinkingLevel: ThinkingLevel;
+	reason: string; signals: string[]; overrideSource?: string; overrideConflict?: boolean; advisoryThinkingLevel: ThinkingLevel;
 	thinkingNormalization?: string; executionFallbackReason?: string;
 }
 export interface ResolveWorkProfileInput {
@@ -76,7 +76,9 @@ export function resolveWorkProfile(input: ResolveWorkProfileInput): WorkProfileD
 		selectedModel, requestedThinkingLevel: level, executionMode, requestedExecutionMode,
 		modelRouting: managed ? "managed-family" : "preserved-external",
 		reason: `${signals.join(", ")}; quality-floor/cost-frontier policy`, signals,
-		...(override.source ? { overrideSource: override.source } : {}), advisoryThinkingLevel: advisoryRaw,
+		...(override.source ? { overrideSource: override.source } : {}),
+		...(override.conflict ? { overrideConflict: true } : {}),
+		advisoryThinkingLevel: advisoryRaw,
 		...(advisoryRaw === "max" && !override.level ? { thinkingNormalization: "automatic max capped to xhigh" } : {}),
 		...(requestedExecutionMode !== executionMode ? { executionFallbackReason: "Pi subagent tools unavailable" } : {}),
 	};

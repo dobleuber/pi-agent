@@ -408,7 +408,11 @@ describe("router model", () => {
 
 		assert.equal(unavailable.englishPrompt, "hola");
 		assert.equal(unavailable.degradedReason, "router model unavailable: connection refused");
+		assert.equal(unavailable.translateFinalAnswer, true);
+		assert.match(unavailable.translationNormalization ?? "", /unknown source language.*conservative default true/);
 		assert.equal(oversized.degradedReason, "input exceeds router maxInputChars: 12001 > 12000");
+		assert.equal(oversized.translateFinalAnswer, true);
+		assert.match(oversized.translationNormalization ?? "", /unknown source language.*conservative default true/);
 	});
 
 	it("routes remote OpenAI Codex subscription models through Pi modelRegistry and complete", async () => {

@@ -380,6 +380,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 				policySelectedModel: profile.selectedModel, effectiveModel, modelRouting: profile.modelRouting,
 				executionMode: profile.executionMode, requestedExecutionMode: profile.requestedExecutionMode,
 				normalizedSignals: profile.signals, overrideSource: profile.overrideSource,
+				...(profile.overrideConflict ? { overrideConflict: true } : {}),
 				thinkingWasClamped: effectiveThinkingLevel !== profile.requestedThinkingLevel,
 				...(profile.thinkingNormalization ? { thinkingNormalization: profile.thinkingNormalization } : {}),
 				...(fallbackEvents.length ? { fallbackEvents } : {}) },

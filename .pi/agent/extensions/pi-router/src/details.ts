@@ -25,6 +25,7 @@ export interface RouterDetails {
 	requestedExecutionMode?: "standard" | "parallel-agentic" | "native-ultra";
 	normalizedSignals?: string[];
 	overrideSource?: string;
+	overrideConflict?: boolean;
 	thinkingWasClamped?: boolean;
 	thinkingNormalization?: string;
 	translationDecision?: string;

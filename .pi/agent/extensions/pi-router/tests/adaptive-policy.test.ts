@@ -41,6 +41,7 @@ describe("adaptive thinking policy", () => {
 		}
 		const conflict = resolveWorkProfile({ prompt: "@thinking:high use maximum reasoning", currentModel: "openai-codex/gpt-5.6-sol", advisory: advisory("max") });
 		assert.equal(conflict.requestedThinkingLevel, "high");
+		assert.equal(conflict.overrideConflict, true);
 	});
 
 	it("uses adaptive floors while preserving external models", () => {

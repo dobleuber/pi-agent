@@ -84,10 +84,12 @@ it("replaces unsupported explicit finals visibly while preserving non-text conte
 	assert.equal(result.message.timestamp, 7);
 });
 
-it("blocks invalid controls and strips valid controls before dispatch", async () => {
+it("blocks invalid controls, strips valid controls, and audits syntax conflicts", async () => {
 	let routed = ""; const h = harness({ routePrompt: async (prompt: string) => { routed = prompt; return { englishPrompt: prompt, sourceLanguage: "en", thinkingLevel: "medium", translateFinalAnswer: false }; } });
 	const invalid = await h.handlers.get("input")({ text: "@thinking:turbo do it", source: "interactive" }, h.ctx);
 	assert.deepEqual(invalid, { action: "handled" }); assert.match(h.notices.at(-1)!, /Invalid @thinking/);
-	await h.handlers.get("input")({ text: "@thinking:high do it", source: "interactive" }, h.ctx);
-	assert.equal(routed, "do it"); assert.equal(h.appended.at(-1).details.overrideSource, "syntax");
+	await h.handlers.get("input")({ text: "@thinking:high use maximum reasoning to do it", source: "interactive" }, h.ctx);
+	assert.equal(routed, "use maximum reasoning to do it");
+	assert.equal(h.appended.at(-1).details.overrideSource, "syntax");
+	assert.equal(h.appended.at(-1).details.overrideConflict, true);
 });
