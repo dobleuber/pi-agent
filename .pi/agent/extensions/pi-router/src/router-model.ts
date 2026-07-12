@@ -3,13 +3,24 @@ import { assistantText, completeWithPiRouterModel, userMessage, type PiAiRuntime
 import { validatePlaceholderIntegrity } from "./placeholder-integrity.ts";
 import { maskProtectedSpans } from "./protected-text.ts";
 
-export type ThinkingLevel = "low" | "medium" | "high";
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type TaskComplexity = "trivial" | "routine" | "moderate" | "complex" | "difficult" | "unknown";
+export type TaskRisk = "low" | "medium" | "high" | "unknown";
+export type WorkModelTier = "luna" | "terra" | "sol";
 
 export interface RouterModelResult {
 	englishPrompt: string;
 	sourceLanguage: string;
 	thinkingLevel: ThinkingLevel;
+	thinkingReason?: string;
+	taskComplexity?: TaskComplexity;
+	taskRisk?: TaskRisk;
+	expectedWorkflow?: string;
+	suggestedWorkModelTier?: WorkModelTier;
+	parallelizable?: boolean;
+	parallelizationReason?: string;
 	translateFinalAnswer: boolean;
+	translationNormalization?: string;
 	usedConversationContext?: boolean;
 	resolvedReferences?: string[];
 	unresolvedReferences?: string[];
@@ -52,8 +63,8 @@ Rules:
 - Do not add requirements, constraints, or tasks that are not stated by the latest user prompt or clearly referenced from context.
 - If a reference cannot be resolved confidently, keep the prompt faithful and report it in unresolvedReferences instead of inventing intent.
 
-Required JSON keys: translation, sourceLanguage, thinkingLevel, translateFinalAnswer, usedConversationContext, resolvedReferences, unresolvedReferences.
-Allowed sourceLanguage: es, en, mixed, unknown. Allowed thinkingLevel: low, medium, high.`;
+Required JSON keys: translation, sourceLanguage, thinkingLevel, thinkingReason, taskComplexity, taskRisk, expectedWorkflow, suggestedWorkModelTier, parallelizable, parallelizationReason, translateFinalAnswer, usedConversationContext, resolvedReferences, unresolvedReferences.
+Allowed sourceLanguage: es, en, mixed, unknown. Allowed thinkingLevel: off, minimal, low, medium, high, xhigh, max. Suggested values are advisory; never request Ultra.`;
 
 export function createRouterMetadata(input: {
 	originalPrompt: string;
@@ -152,8 +163,10 @@ function normalizeRouterPayload(
 	maskedPrompt: string = originalPrompt,
 ): RouterModelResult {
 	const thinkingLevel = parseThinkingLevel(payload?.thinkingLevel);
-	const sourceLanguage = typeof payload?.sourceLanguage === "string" ? payload.sourceLanguage : "unknown";
-	const translateFinalAnswer = payload?.translateFinalAnswer !== false;
+	const sourceLanguage = payload?.sourceLanguage === "es" || payload?.sourceLanguage === "en" || payload?.sourceLanguage === "mixed" ? payload.sourceLanguage : "unknown";
+	const modelTranslateFinalAnswer = payload?.translateFinalAnswer !== false;
+	const translateFinalAnswer = sourceLanguage === "es" || sourceLanguage === "mixed" ? true : modelTranslateFinalAnswer;
+	const translationNormalization = translateFinalAnswer !== modelTranslateFinalAnswer ? "source-language invariant forced final translation" : undefined;
 	const usedConversationContext = payload?.usedConversationContext === true;
 	const resolvedReferences = parseStringArray(payload?.resolvedReferences);
 	const unresolvedReferences = parseStringArray(payload?.unresolvedReferences);
@@ -181,6 +194,8 @@ function normalizeRouterPayload(
 			sourceLanguage,
 			thinkingLevel,
 			translateFinalAnswer,
+			...(translationNormalization ? { translationNormalization } : {}),
+			...parseAdvisoryFields(payload),
 			usedConversationContext,
 			resolvedReferences,
 			unresolvedReferences,
@@ -192,6 +207,8 @@ function normalizeRouterPayload(
 		sourceLanguage,
 		thinkingLevel,
 		translateFinalAnswer,
+		...(translationNormalization ? { translationNormalization } : {}),
+		...parseAdvisoryFields(payload),
 		usedConversationContext,
 		resolvedReferences,
 		unresolvedReferences,
@@ -226,8 +243,22 @@ function parseRouterJsonObject(content: string): any {
 }
 
 function parseThinkingLevel(value: unknown): ThinkingLevel {
-	return value === "low" || value === "medium" || value === "high" ? value : "medium";
+	return ["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(String(value)) ? value as ThinkingLevel : "medium";
 }
+
+function parseAdvisoryFields(payload: any): Partial<RouterModelResult> {
+	return {
+		thinkingReason: typeof payload?.thinkingReason === "string" ? payload.thinkingReason : "router advisory",
+		taskComplexity: parseEnum(payload?.taskComplexity, ["trivial", "routine", "moderate", "complex", "difficult"], "unknown"),
+		taskRisk: parseEnum(payload?.taskRisk, ["low", "medium", "high"], "unknown"),
+		expectedWorkflow: typeof payload?.expectedWorkflow === "string" ? payload.expectedWorkflow : "unknown",
+		suggestedWorkModelTier: parseEnum(payload?.suggestedWorkModelTier, ["luna", "terra", "sol"], "terra"),
+		parallelizable: payload?.parallelizable === true,
+		parallelizationReason: typeof payload?.parallelizationReason === "string" ? payload.parallelizationReason : "not provided",
+	};
+}
+
+function parseEnum<T extends string>(value: unknown, values: readonly T[], fallback: T): T { return values.includes(value as T) ? value as T : fallback; }
 
 function parseStringArray(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];

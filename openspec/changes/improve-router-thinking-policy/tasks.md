@@ -1,20 +1,20 @@
 ## 1. Runtime contracts and failing policy tests
 
-- [ ] 1.1 Verify the installed Pi extension types and live event shapes for `ThinkingLevel`, `setModel()`, `setThinkingLevel()`, `getThinkingLevel()`, active tool discovery, and assistant `phase`; capture compatibility decisions in focused tests before production edits.
-- [ ] 1.2 Add failing tests that expand the shared thinking vocabulary to `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max` without normalizing `xhigh` down to `high`.
-- [ ] 1.3 Add failing bilingual table-driven tests for `@thinking:<level>`, unequivocal natural-language overrides, invalid controls, syntax-versus-language precedence, and quoted/example text that MUST NOT activate an override.
-- [ ] 1.4 Add failing table-driven policy tests for preserved external models: aligned trivial signals select `low`, uncertainty defaults to `medium`, complex work floors at `high`, and exhaustive/high-value work floors at `xhigh`.
-- [ ] 1.5 Add failing managed-family profile tests proving routine work selects Luna Max, complex bounded work selects Terra Max, difficult high-value work selects Sol XHigh, and explicit maximum intent selects Sol Max.
-- [ ] 1.6 Add failing regression tests proving GPT Mini suggestions for Luna Low/Medium, Terra XHigh, Sol Medium, Sol High, or automatic Sol Max cannot bypass the approved profile table.
+- [x] 1.1 Verify the installed Pi extension types and live event shapes for `ThinkingLevel`, `setModel()`, `setThinkingLevel()`, `getThinkingLevel()`, active tool discovery, and assistant `phase`; capture compatibility decisions in focused tests before production edits.
+- [x] 1.2 Add failing tests that expand the shared thinking vocabulary to `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max` without normalizing `xhigh` down to `high`.
+- [x] 1.3 Add failing bilingual table-driven tests for `@thinking:<level>`, unequivocal natural-language overrides, invalid controls, syntax-versus-language precedence, and quoted/example text that MUST NOT activate an override.
+- [x] 1.4 Add failing table-driven policy tests for preserved external models: aligned trivial signals select `low`, uncertainty defaults to `medium`, complex work floors at `high`, and exhaustive/high-value work floors at `xhigh`.
+- [x] 1.5 Add failing managed-family profile tests proving routine work selects Luna Max, complex bounded work selects Terra Max, difficult high-value work selects Sol XHigh, and explicit maximum intent selects Sol Max.
+- [x] 1.6 Add failing regression tests proving GPT Mini suggestions for Luna Low/Medium, Terra XHigh, Sol Medium, Sol High, or automatic Sol Max cannot bypass the approved profile table.
 
 ## 2. Hybrid thinking and profile policy
 
-- [ ] 2.1 Replace the disconnected keyword-only selector in `src/thinking.ts` with shared level ordering, normalized policy signals, explicit-override parsing, and explainable decision types.
-- [ ] 2.2 Implement deterministic complexity, risk, depth, workflow, and contextual-continuation floors while keeping GPT Mini classification advisory and `medium` conservative for preserved external models.
-- [ ] 2.3 Implement the centralized managed-family coding frontier Luna Max → Terra Max → Sol XHigh → Sol Max, including explicit lower-level override behavior and evidence metadata.
-- [ ] 2.4 Extend the router-model JSON contract with `thinkingReason`, `taskComplexity`, `taskRisk`, `expectedWorkflow`, `suggestedWorkModelTier`, `parallelizable`, and `parallelizationReason`, retaining safe defaults for missing advisory fields.
-- [ ] 2.5 Enforce policy precedence: explicit syntax, unequivocal natural language, deterministic quality floor, semantic suggestion, then conservative fallback; ensure GPT Mini cannot directly force model switching or native Ultra.
-- [ ] 2.6 Run the focused policy suites and refactor duplicated level/profile constants into one auditable policy module while preserving green tests.
+- [x] 2.1 Replace the disconnected keyword-only selector in `src/thinking.ts` with shared level ordering, normalized policy signals, explicit-override parsing, and explainable decision types.
+- [x] 2.2 Implement deterministic complexity, risk, depth, workflow, and contextual-continuation floors while keeping GPT Mini classification advisory and `medium` conservative for preserved external models.
+- [x] 2.3 Implement the centralized managed-family coding frontier Luna Max → Terra Max → Sol XHigh → Sol Max, including explicit lower-level override behavior and evidence metadata.
+- [x] 2.4 Extend the router-model JSON contract with `thinkingReason`, `taskComplexity`, `taskRisk`, `expectedWorkflow`, `suggestedWorkModelTier`, `parallelizable`, and `parallelizationReason`, retaining safe defaults for missing advisory fields.
+- [x] 2.5 Enforce policy precedence: explicit syntax, unequivocal natural language, deterministic quality floor, semantic suggestion, then conservative fallback; ensure GPT Mini cannot directly force model switching or native Ultra.
+- [x] 2.6 Run the focused policy suites and refactor duplicated level/profile constants into one auditable policy module while preserving green tests.
 
 ## 3. Work-model and execution-mode application
 
