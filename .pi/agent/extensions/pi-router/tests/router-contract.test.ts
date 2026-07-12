@@ -13,7 +13,14 @@ it("normalizes the expanded advisory contract and forces Spanish/mixed translati
 	}
 });
 
-it("uses safe advisory defaults when expanded fields are missing", async () => {
+it("uses and records the router flag for unknown language", async () => {
 	const result = await routePromptWithModel("hello", DEFAULT_ROUTER_CONFIG.routerModel, {}, runtime({ translation: "hello", sourceLanguage: "unknown", thinkingLevel: "nonsense", translateFinalAnswer: false }));
 	assert.equal(result.thinkingLevel, "medium"); assert.equal(result.taskComplexity, "unknown"); assert.equal(result.taskRisk, "unknown"); assert.equal(result.suggestedWorkModelTier, "terra"); assert.equal(result.translateFinalAnswer, false);
+	assert.match(result.translationNormalization ?? "", /unknown source language.*router-model flag false/);
+});
+
+it("uses and records a conservative translation default for unknown language", async () => {
+	const result = await routePromptWithModel("hello", DEFAULT_ROUTER_CONFIG.routerModel, {}, runtime({ translation: "hello", sourceLanguage: "unknown", thinkingLevel: "medium" }));
+	assert.equal(result.translateFinalAnswer, true);
+	assert.match(result.translationNormalization ?? "", /unknown source language.*conservative default true/);
 });

@@ -26,6 +26,8 @@ export interface RouterDetails {
 	normalizedSignals?: string[];
 	overrideSource?: string;
 	thinkingWasClamped?: boolean;
+	thinkingNormalization?: string;
+	translationDecision?: string;
 }
 
 export interface RouterDetailsEntry {
@@ -58,6 +60,7 @@ export function createRouterDetailsEntry(metadata: RouterMetadata, workModel?: W
 			routerModel: metadata.routerModel,
 			requestedThinkingLevel: metadata.requestedThinkingLevel,
 			workModel: formattedWorkModel,
+			...(metadata.translationDecision ? { translationDecision: metadata.translationDecision } : {}),
 			...(metadata.fallback ? { fallbackEvents: [metadata.fallback] } : {}),
 		},
 	};

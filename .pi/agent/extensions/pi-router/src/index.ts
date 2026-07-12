@@ -19,6 +19,8 @@ export interface PiRouterDependencies {
 	pickPromptPreparationPhrase?: (phrases: readonly string[], previous?: string) => string;
 	setInterval?: (callback: () => void, delay: number) => any;
 	clearInterval?: (interval: any) => void;
+	/** Reads the mutable Pi context after model changes; injectable for API-compatible testing. */
+	readCurrentModel?: (ctx: any) => WorkModelInfo;
 }
 
 const PROMPT_PREPARATION_PHRASES = [
@@ -88,13 +90,14 @@ function replaceTextContent(content: unknown, text: string): unknown {
 	if (typeof content === "string") return text;
 	if (Array.isArray(content)) {
 		let replaced = false;
-		return content.map((part) => {
+		const replacedContent = content.map((part) => {
 			if (!replaced && part && typeof part === "object" && (part as any).type === "text") {
 				replaced = true;
 				return { ...part, text };
 			}
 			return part;
 		});
+		return replaced ? replacedContent : [...replacedContent, { type: "text", text }];
 	}
 	return [{ type: "text", text }];
 }
@@ -138,15 +141,6 @@ function restoreEnglishAssistantContext(messages: any[], branch: any[]): any[] {
 		const englishAnswers = answersBySpanish.get(spanish);
 		if (englishAnswers?.length !== 1) return message;
 		return { ...message, content: replaceTextContent(message.content, englishAnswers[0]) };
-	});
-}
-
-function completeSkippedFinalAnswer(entry: RouterDetailsEntry, reason: string, assistantTimestamp?: number): RouterDetailsEntry {
-	return extendRouterDetailsAfterCompletion(entry, {
-		englishAnswer: "",
-		spanishAnswer: "",
-		assistantTimestamp,
-		fallbackEvents: [reason],
 	});
 }
 
@@ -248,12 +242,14 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		const shouldTranslateFinalAnswer = pendingTurn.shouldTranslateFinalAnswer;
 		const englishAnswer = supportedText;
 		if (englishAnswer === null) {
-			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: unsupported message content", event.message.timestamp));
-			return;
+			const diagnostic = "Pi router: final answer had unsupported content.";
+			pi.appendEntry("pi-router-details", extendRouterDetailsAfterCompletion(detailsForTurn, { englishAnswer: diagnostic, spanishAnswer: diagnostic, assistantTimestamp: event.message.timestamp, fallbackEvents: ["final answer translation skipped: unsupported message content"] }));
+			return { message: { ...event.message, content: replaceTextContent(event.message.content, diagnostic) } as typeof event.message };
 		}
 		if (!englishAnswer.trim()) {
-			pi.appendEntry("pi-router-details", completeSkippedFinalAnswer(detailsForTurn, "final answer translation skipped: empty answer", event.message.timestamp));
-			return;
+			const diagnostic = "Pi router: final answer was empty.";
+			pi.appendEntry("pi-router-details", extendRouterDetailsAfterCompletion(detailsForTurn, { englishAnswer: diagnostic, spanishAnswer: diagnostic, assistantTimestamp: event.message.timestamp, fallbackEvents: ["final answer translation skipped: empty answer"] }));
+			return { message: { ...event.message, content: replaceTextContent(event.message.content, diagnostic) } as typeof event.message };
 		}
 		if (!shouldTranslateFinalAnswer) {
 			pi.appendEntry("pi-router-details", extendRouterDetailsAfterCompletion(detailsForTurn, {
@@ -342,7 +338,8 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			return { action: "handled" };
 		}
 
-		const current = selectedWorkModelFromPiContext(ctx);
+		const readCurrentModel = dependencies.readCurrentModel ?? selectedWorkModelFromPiContext;
+		const current = readCurrentModel(ctx);
 		const currentModel = current.provider && current.model ? `${current.provider}/${current.model}` : "unknown";
 		const activeTools = typeof (pi as any).getActiveTools === "function" ? (pi as any).getActiveTools() : (ctx as any)?.tools ?? [];
 		const subagentToolsAvailable = Array.isArray(activeTools) && activeTools.some((tool: any) => /subagent|delegate|parallel/i.test(typeof tool === "string" ? tool : tool?.name ?? ""));
@@ -356,7 +353,13 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 				const warning = `Pi router model fallback: ${profile.selectedModel} unavailable.`;
 				fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
 			} else try {
-				await (pi as any).setModel(resolved); effectiveModel = `${resolved.provider}/${resolved.id}`;
+				await (pi as any).setModel(resolved);
+				const effective = readCurrentModel(ctx);
+				effectiveModel = effective.provider && effective.model ? `${effective.provider}/${effective.model}` : "unknown";
+				if (effectiveModel !== profile.selectedModel) {
+					const warning = `Pi router model fallback: requested ${profile.selectedModel}, effective ${effectiveModel}.`;
+					fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
+				}
 			} catch (error) {
 				const warning = `Pi router model fallback: ${String(error)}`;
 				fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
@@ -378,6 +381,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 				executionMode: profile.executionMode, requestedExecutionMode: profile.requestedExecutionMode,
 				normalizedSignals: profile.signals, overrideSource: profile.overrideSource,
 				thinkingWasClamped: effectiveThinkingLevel !== profile.requestedThinkingLevel,
+				...(profile.thinkingNormalization ? { thinkingNormalization: profile.thinkingNormalization } : {}),
 				...(fallbackEvents.length ? { fallbackEvents } : {}) },
 		};
 		pendingRoutedTurns.push({

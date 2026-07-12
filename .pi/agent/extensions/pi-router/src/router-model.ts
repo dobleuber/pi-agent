@@ -36,6 +36,7 @@ export interface RouterMetadata {
 	usedConversationContext?: boolean;
 	resolvedReferences?: string[];
 	unresolvedReferences?: string[];
+	translationDecision?: string;
 	fallback?: string;
 }
 
@@ -80,6 +81,7 @@ export function createRouterMetadata(input: {
 		...(input.result.usedConversationContext !== undefined ? { usedConversationContext: input.result.usedConversationContext } : {}),
 		...(input.result.resolvedReferences ? { resolvedReferences: input.result.resolvedReferences } : {}),
 		...(input.result.unresolvedReferences ? { unresolvedReferences: input.result.unresolvedReferences } : {}),
+		...(input.result.translationNormalization ? { translationDecision: input.result.translationNormalization } : {}),
 		...(input.result.degradedReason ? { fallback: input.result.degradedReason } : {}),
 	};
 }
@@ -164,9 +166,14 @@ function normalizeRouterPayload(
 ): RouterModelResult {
 	const thinkingLevel = parseThinkingLevel(payload?.thinkingLevel);
 	const sourceLanguage = payload?.sourceLanguage === "es" || payload?.sourceLanguage === "en" || payload?.sourceLanguage === "mixed" ? payload.sourceLanguage : "unknown";
-	const modelTranslateFinalAnswer = payload?.translateFinalAnswer !== false;
+	const hasTranslationFlag = typeof payload?.translateFinalAnswer === "boolean";
+	const modelTranslateFinalAnswer = hasTranslationFlag ? payload.translateFinalAnswer : true;
 	const translateFinalAnswer = sourceLanguage === "es" || sourceLanguage === "mixed" ? true : modelTranslateFinalAnswer;
-	const translationNormalization = translateFinalAnswer !== modelTranslateFinalAnswer ? "source-language invariant forced final translation" : undefined;
+	const translationNormalization = sourceLanguage === "unknown"
+		? hasTranslationFlag
+			? `unknown source language; router-model flag ${modelTranslateFinalAnswer} used`
+			: "unknown source language; conservative default true used"
+		: translateFinalAnswer !== modelTranslateFinalAnswer ? "source-language invariant forced final translation" : undefined;
 	const usedConversationContext = payload?.usedConversationContext === true;
 	const resolvedReferences = parseStringArray(payload?.resolvedReferences);
 	const unresolvedReferences = parseStringArray(payload?.unresolvedReferences);

@@ -592,7 +592,8 @@ describe("pi-router extension entrypoint", () => {
 		}, ctx);
 
 		assert.equal(translateCalls, 0);
-		assert.equal(result, undefined);
+		assert.match(result.message.content[0].text, /unsupported content/);
+		assert.deepEqual(result.message.content[1], { type: "image", url: "file://screenshot.png" });
 		assert.equal(appended.at(-1)![0], "pi-router-details");
 		assert.equal(appended.at(-1)![1].phase, "complete");
 		assert.deepEqual(appended.at(-1)![1].details.fallbackEvents, ["final answer translation skipped: unsupported message content"]);
@@ -635,7 +636,7 @@ describe("pi-router extension entrypoint", () => {
 		}, ctx);
 
 		assert.equal(translateCalls, 0);
-		assert.equal(result, undefined);
+		assert.match(result.message.content[0].text, /unsupported content/);
 		assert.equal(appended.at(-1)![1].phase, "complete");
 		assert.deepEqual(appended.at(-1)![1].details.fallbackEvents, ["final answer translation skipped: unsupported message content"]);
 	});
