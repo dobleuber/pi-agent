@@ -64,8 +64,8 @@ export function resolveWorkProfile(input: ResolveWorkProfileInput): WorkProfileD
 	if (managed) {
 		if (override.level) {
 			level = override.level;
-			if (override.level === "max") selectedModel = MANAGED_PROFILE_EVIDENCE.solMax.model;
-			else if (THINKING_RANK[override.level] < THINKING_RANK.high) selectedModel = MANAGED_PROFILE_EVIDENCE.luna.model;
+			if (override.level === "max" || override.level === "xhigh") selectedModel = MANAGED_PROFILE_EVIDENCE.solMax.model;
+			else selectedModel = MANAGED_PROFILE_EVIDENCE.luna.model;
 		} else if (floor === "xhigh") { selectedModel = MANAGED_PROFILE_EVIDENCE.solXHigh.model; level = "xhigh"; }
 		else if (floor === "high") { selectedModel = MANAGED_PROFILE_EVIDENCE.terra.model; level = "max"; }
 		else { selectedModel = MANAGED_PROFILE_EVIDENCE.luna.model; level = "max"; }

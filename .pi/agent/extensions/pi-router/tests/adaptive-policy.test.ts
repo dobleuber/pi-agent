@@ -29,14 +29,16 @@ describe("adaptive thinking policy", () => {
 		assert.equal(parseThinkingOverride("@thinking:max do it").prompt, "do it");
 	});
 
-	it("honors every explicit managed-family syntax level before automatic floors", () => {
-		for (const level of THINKING_LEVELS) {
+	it("honors every explicit managed-family syntax level with deterministic models", () => {
+		const expectedModel = { off: "luna", minimal: "luna", low: "luna", medium: "luna", high: "luna", xhigh: "sol", max: "sol" } as const;
+		for (const priorModel of ["luna", "terra", "sol"] as const) for (const level of THINKING_LEVELS) {
 			const decision = resolveWorkProfile({
 				prompt: `@thinking:${level} perform an exhaustive security review with maximum reasoning`,
-				currentModel: "openai-codex/gpt-5.6-terra",
+				currentModel: `openai-codex/gpt-5.6-${priorModel}`,
 				advisory: advisory("max", { taskComplexity: "complex", taskRisk: "high" }),
 			});
-			assert.equal(decision.requestedThinkingLevel, level, level);
+			assert.equal(decision.requestedThinkingLevel, level, `${priorModel}/${level}`);
+			assert.equal(decision.selectedModel, `openai-codex/gpt-5.6-${expectedModel[level]}`, `${priorModel}/${level}`);
 			assert.equal(decision.overrideSource, "syntax");
 		}
 		const conflict = resolveWorkProfile({ prompt: "@thinking:high use maximum reasoning", currentModel: "openai-codex/gpt-5.6-sol", advisory: advisory("max") });

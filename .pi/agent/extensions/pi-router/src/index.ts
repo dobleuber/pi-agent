@@ -164,6 +164,22 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	const initialConfig = dependencies.config ?? DEFAULT_ROUTER_CONFIG;
 	const pendingRoutedTurns: PendingRoutedTurn[] = [];
 	let nextTurnId = 1;
+	let inputTail: Promise<void> | null = null;
+	let messageEndTail: Promise<void> | null = null;
+
+	function serialize<T>(tail: "input" | "messageEnd", work: () => Promise<T>): Promise<T> {
+		const previous = tail === "input" ? inputTail : messageEndTail;
+		const result = previous ? previous.then(work) : work();
+		const settled = result.then(() => undefined, () => undefined);
+		if (tail === "input") {
+			inputTail = settled;
+			void settled.then(() => { if (inputTail === settled) inputTail = null; });
+		} else {
+			messageEndTail = settled;
+			void settled.then(() => { if (messageEndTail === settled) messageEndTail = null; });
+		}
+		return result;
+	}
 
 	function loadPersistedConfig(): Partial<Pick<RouterConfig, "state">> {
 		const persistedState = stateStore.loadState();
@@ -224,7 +240,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		return { messages: restoreEnglishAssistantContext(event.messages, branch) };
 	});
 
-	pi.on("message_end", async (event, ctx) => {
+	pi.on("message_end", async (event, ctx) => serialize("messageEnd", async () => {
 		refreshRouterSettingsFromStore();
 		if (event.message?.role !== "assistant") {
 			return;
@@ -285,9 +301,9 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 				content: replaceTextContent(event.message.content, translated.spanishAnswer),
 			} as typeof event.message,
 		};
-	});
+	}));
 
-	pi.on("input", async (event, ctx) => {
+	pi.on("input", async (event, ctx) => serialize("input", async () => {
 		refreshRouterSettingsFromStore();
 		if (!shouldRouteInput({ text: event.text, source: event.source })) {
 			return { action: "continue" };
@@ -352,6 +368,9 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			if (!resolved) {
 				const warning = `Pi router model fallback: ${profile.selectedModel} unavailable.`;
 				fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
+			} else if (typeof (pi as any).setModel !== "function") {
+				const warning = "Pi router model fallback: pi.setModel API unavailable; preserving current model.";
+				fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
 			} else try {
 				await (pi as any).setModel(resolved);
 				const effective = readCurrentModel(ctx);
@@ -365,7 +384,12 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 				fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
 			}
 		}
-		(pi as any).setThinkingLevel(profile.requestedThinkingLevel);
+		if (typeof (pi as any).setThinkingLevel === "function") {
+			(pi as any).setThinkingLevel(profile.requestedThinkingLevel);
+		} else {
+			const warning = "Pi router thinking fallback: pi.setThinkingLevel API unavailable; preserving current thinking level.";
+			fallbackEvents.push(warning); ctx.ui.notify(warning, "warning");
+		}
 		const effectiveThinkingLevel = typeof (pi as any).getThinkingLevel === "function" ? (pi as any).getThinkingLevel() : profile.requestedThinkingLevel;
 		if (effectiveThinkingLevel !== profile.requestedThinkingLevel) {
 			const warning = `Pi router adjusted thinking ${profile.requestedThinkingLevel} to ${effectiveThinkingLevel}.`;
@@ -398,5 +422,5 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 			? `${prepared.prompt}\n\nExecution guidance: delegate only independent work units through active Pi subagent tools; keep dependent work local and bounded.`
 			: prepared.prompt;
 		return { action: "transform", text: dispatchedPrompt };
-	});
+	}));
 }
