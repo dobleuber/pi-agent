@@ -1,5 +1,5 @@
 import type { WorkModelInfo } from "./config.ts";
-import type { RouterMetadata, ThinkingLevel } from "./router-model.ts";
+import type { RouterMetadata, RouterModelResult, ThinkingLevel } from "./router-model.ts";
 
 export type RouterDetailsPhase = "pre-dispatch" | "complete";
 
@@ -29,6 +29,9 @@ export interface RouterDetails {
 	thinkingWasClamped?: boolean;
 	thinkingNormalization?: string;
 	translationDecision?: string;
+	suggestedWorkModelTier?: "luna" | "terra" | "sol";
+	parallelizable?: boolean;
+	parallelizationReason?: string;
 }
 
 export interface RouterDetailsEntry {
@@ -47,7 +50,7 @@ export interface CompletedRouterDetails {
 	fallbackEvents?: string[];
 }
 
-export function createRouterDetailsEntry(metadata: RouterMetadata, workModel?: WorkModelInfo): RouterDetailsEntry {
+export function createRouterDetailsEntry(metadata: RouterMetadata, workModel?: WorkModelInfo, advisory?: RouterModelResult): RouterDetailsEntry {
 	const formattedWorkModel = formatWorkModel(workModel);
 	return {
 		phase: "pre-dispatch",
@@ -63,6 +66,9 @@ export function createRouterDetailsEntry(metadata: RouterMetadata, workModel?: W
 			workModel: formattedWorkModel,
 			...(metadata.translationDecision ? { translationDecision: metadata.translationDecision } : {}),
 			...(metadata.fallback ? { fallbackEvents: [metadata.fallback] } : {}),
+			...(advisory?.suggestedWorkModelTier ? { suggestedWorkModelTier: advisory.suggestedWorkModelTier } : {}),
+			...(advisory?.parallelizable !== undefined ? { parallelizable: advisory.parallelizable } : {}),
+			...(advisory?.parallelizationReason ? { parallelizationReason: advisory.parallelizationReason } : {}),
 		},
 	};
 }

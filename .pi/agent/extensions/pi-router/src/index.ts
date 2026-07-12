@@ -343,7 +343,7 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 		const currentModel = current.provider && current.model ? `${current.provider}/${current.model}` : "unknown";
 		const activeTools = typeof (pi as any).getActiveTools === "function" ? (pi as any).getActiveTools() : (ctx as any)?.tools ?? [];
 		const subagentToolsAvailable = Array.isArray(activeTools) && activeTools.some((tool: any) => /subagent|delegate|parallel/i.test(typeof tool === "string" ? tool : tool?.name ?? ""));
-		const profile = resolveWorkProfile({ prompt: event.text, currentModel, advisory: prepared.result, subagentToolsAvailable });
+		const profile = resolveWorkProfile({ prompt: event.text, context: prepared.context?.conversationSummary, currentModel, advisory: prepared.result, subagentToolsAvailable });
 		const fallbackEvents: string[] = [...(prepared.details.details.fallbackEvents ?? [])];
 		let effectiveModel = currentModel;
 		if (profile.modelRouting === "managed-family" && profile.selectedModel !== currentModel) {

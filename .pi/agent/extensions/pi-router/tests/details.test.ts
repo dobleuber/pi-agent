@@ -23,6 +23,16 @@ describe("router details UX model", () => {
 		assert.equal(entry.details.transformedPrompt, "Improve the router.");
 	});
 
+	it("persists work-tier and parallelization advisory fields", () => {
+		const entry = createRouterDetailsEntry({ originalPrompt: "review", transformedPrompt: "review", sourceLanguage: "en", routerModel: "router", requestedThinkingLevel: "xhigh" }, undefined, {
+			englishPrompt: "review", sourceLanguage: "en", thinkingLevel: "xhigh", translateFinalAnswer: false,
+			suggestedWorkModelTier: "sol", parallelizable: true, parallelizationReason: "independent modules",
+		});
+		assert.equal(entry.details.suggestedWorkModelTier, "sol");
+		assert.equal(entry.details.parallelizable, true);
+		assert.equal(entry.details.parallelizationReason, "independent modules");
+	});
+
 	it("toggles details without changing routing enablement", () => {
 		const entry = createRouterDetailsEntry({
 			originalPrompt: "hola",

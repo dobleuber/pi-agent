@@ -13,8 +13,8 @@ export interface PrepareRoutedPromptInput {
 
 export type PreparedRoutedPrompt =
 	| { action: "continue"; prompt: string; bypassed?: boolean }
-	| { action: "handled"; message: string; details: RouterDetailsEntry; result: RouterModelResult }
-	| { action: "transform"; prompt: string; details: RouterDetailsEntry; result: RouterModelResult; warning?: string };
+	| { action: "handled"; message: string; details: RouterDetailsEntry; result: RouterModelResult; context?: RouterContextOptions }
+	| { action: "transform"; prompt: string; details: RouterDetailsEntry; result: RouterModelResult; context?: RouterContextOptions; warning?: string };
 
 export async function prepareRoutedPrompt(input: PrepareRoutedPromptInput): Promise<PreparedRoutedPrompt> {
 	const bypass = parseSinglePromptBypass(input.prompt);
@@ -34,7 +34,7 @@ export async function prepareRoutedPrompt(input: PrepareRoutedPromptInput): Prom
 		result,
 		routerModel: input.config.routerModel,
 	});
-	const details = createRouterDetailsEntry(metadata, input.workModel);
+	const details = createRouterDetailsEntry(metadata, input.workModel, result);
 	if (result.degradedReason) {
 		if (input.config.routerModel.fallbackMode === "error") {
 			return {
@@ -42,6 +42,7 @@ export async function prepareRoutedPrompt(input: PrepareRoutedPromptInput): Prom
 				message: `Pi router unavailable; prompt was not dispatched: ${result.degradedReason}`,
 				details,
 				result,
+				...(input.context ? { context: input.context } : {}),
 			};
 		}
 		if (input.config.routerModel.fallbackMode === "passthrough-with-warning") {
@@ -51,6 +52,7 @@ export async function prepareRoutedPrompt(input: PrepareRoutedPromptInput): Prom
 				warning: `Pi router warning: translation unavailable; dispatching original prompt. ${result.degradedReason}`,
 				details,
 				result,
+				...(input.context ? { context: input.context } : {}),
 			};
 		}
 	}
@@ -60,5 +62,6 @@ export async function prepareRoutedPrompt(input: PrepareRoutedPromptInput): Prom
 		prompt: result.englishPrompt,
 		details,
 		result,
+		...(input.context ? { context: input.context } : {}),
 	};
 }

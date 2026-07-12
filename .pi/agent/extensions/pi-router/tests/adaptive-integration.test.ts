@@ -36,10 +36,37 @@ it("reads back the mutable effective model after setModel and reports a visible 
 });
 
 it("preserves external models and separates parallel-agentic mode", async () => {
-	const h = harness({ model: { provider: "anthropic", id: "claude" }, tools: ["subagent"], result: { englishPrompt: "Review", sourceLanguage: "en", thinkingLevel: "high", translateFinalAnswer: false, parallelizable: true } });
+	const h = harness({ model: { provider: "anthropic", id: "claude" }, tools: ["subagent"], result: { englishPrompt: "Review", sourceLanguage: "en", thinkingLevel: "high", translateFinalAnswer: false, suggestedWorkModelTier: "sol", parallelizable: true, parallelizationReason: "independent modules" } });
 	await h.handlers.get("input")({ text: "independently review modules", source: "interactive" }, h.ctx);
 	assert.equal(h.calls.some(c => c[0] === "model"), false); assert.equal(h.appended[0].details.modelRouting, "preserved-external");
 	assert.equal(h.appended[0].details.executionMode, "parallel-agentic");
+	assert.equal(h.appended[0].details.parallelizable, true);
+	assert.equal(h.appended[0].details.suggestedWorkModelTier, "sol");
+	assert.equal(h.appended[0].details.parallelizationReason, "independent modules");
+});
+
+it("retains Sol XHigh for a contextual exhaustive-review follow-up", async () => {
+	const result = { englishPrompt: "Review it again", sourceLanguage: "en", thinkingLevel: "low", translateFinalAnswer: false, suggestedWorkModelTier: "sol", parallelizable: false, parallelizationReason: "dependent review" };
+	const prepared = await (await import("../src/pipeline.ts")).prepareRoutedPrompt({ prompt: "review it again", config: { state: "on", routerModel: { provider: "openai", model: "router", fallbackMode: "passthrough-with-warning" } } as any, context: { conversationSummary: "The referenced task is an exhaustive repository review." }, routePrompt: async () => result as any });
+	assert.equal(prepared.action, "transform");
+	if (prepared.action !== "transform") return;
+	const decision = (await import("../src/thinking.ts")).resolveWorkProfile({ prompt: "review it again", context: prepared.context?.conversationSummary, currentModel: "openai-codex/gpt-5.6-luna", advisory: prepared.result });
+	assert.equal(decision.selectedModel, "openai-codex/gpt-5.6-sol");
+	assert.equal(decision.requestedThinkingLevel, "xhigh");
+	assert.equal(prepared.details.details.suggestedWorkModelTier, "sol");
+	assert.equal(prepared.details.details.parallelizable, false);
+	assert.equal(prepared.details.details.parallelizationReason, "dependent review");
+});
+
+it("audits execution fallback parallelization advice", async () => {
+	const h = harness({ result: { englishPrompt: "Review", sourceLanguage: "en", thinkingLevel: "high", translateFinalAnswer: false, suggestedWorkModelTier: "terra", parallelizable: true, parallelizationReason: "independent modules" } });
+	await h.handlers.get("input")({ text: "independently review modules", source: "interactive" }, h.ctx);
+	assert.equal(h.appended[0].details.requestedExecutionMode, "parallel-agentic");
+	assert.equal(h.appended[0].details.executionMode, "standard");
+	assert.equal(h.appended[0].details.suggestedWorkModelTier, "terra");
+	assert.equal(h.appended[0].details.parallelizable, true);
+	assert.equal(h.appended[0].details.parallelizationReason, "independent modules");
+	assert.match(h.appended[0].details.fallbackEvents.join(" "), /subagent tools unavailable/);
 });
 
 it("persists automatic thinking and translation normalizations in audit details", async () => {
