@@ -13,6 +13,31 @@ Other providers and model families are preserved. Their reasoning effort still f
 
 Prefix a prompt with `@thinking:off|minimal|low|medium|high|xhigh|max`. The directive is removed before dispatch and overrides automatic classification, subject to Pi's model capability clamp. Unequivocal English and Spanish requests such as “use maximum reasoning” or “usa todas tus capacidades” are also binding. Invalid directives are not dispatched.
 
+To explicitly select the managed Sol Max profile, start a sentence with an
+imperative such as:
+
+```text
+Use Sol Max for this task.
+Usa Sol Max para esta tarea.
+```
+
+These controls request `openai-codex/gpt-5.6-sol` at `max` and are recorded as
+natural-language overrides. Descriptive, negative, and quoted mentions of
+“Sol Max” remain inert so documentation and discussion don't change routing.
+
+## Router-managed compaction
+
+When the router is enabled, it delegates compaction to Pi's native compaction
+implementation while forwarding the current session ID to every Codex summary
+request. This preserves split-turn summaries without changing Pi's native
+compaction result. If session-aware compaction fails, Pi Router shows the error
+and cancels the native fallback instead of silently retrying the known-broken
+request.
+
+This is a temporary workaround for [Pi issue #6477](https://github.com/earendil-works/pi/issues/6477).
+Remove the adapter after Pi's native compaction forwards `sessionId` itself.
+With `/router off`, Pi Router does not intercept compaction.
+
 ## Execution modes and warnings
 
 `standard` is single-agent execution. `parallel-agentic` adds bounded delegation guidance only when the router identifies independent work and Pi subagent tools are active. This is not OpenAI native Ultra. `native-ultra` remains disabled until Pi exposes an explicit native capability; neither `max` nor local subagents imply it.
