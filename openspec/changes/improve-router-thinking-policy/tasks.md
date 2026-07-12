@@ -49,5 +49,5 @@
 - [x] 6.2 Encode the saved official coding cost evidence for Luna Max, Terra Max, Sol XHigh, and Sol Max as policy rationale fixtures without asserting unmeasured latency claims.
 - [x] 6.3 Update Pi Router documentation and status examples for adaptive model/effort routing, explicit overrides, `parallel-agentic`, disabled native Ultra, warnings, and rollback behavior.
 - [x] 6.4 Run focused tests after every TDD slice, then run `npx tsc --noEmit`, the full test suite at least five consecutive times, `git diff --check`, and `openspec validate --all --strict`.
-- [ ] 6.5 Back up the active router outside extension discovery, deploy while preserving `router-state.json`, run TypeScript and the full suite against the active installation, and verify representative live prompts plus persisted detail metadata.
+- [x] 6.5 Back up the active router outside extension discovery, deploy while preserving `router-state.json`, run TypeScript and the full suite against the active installation, and verify representative live prompts plus persisted detail metadata.
 - [x] 6.6 Confirm `reports/` remains untouched, summarize residual risks including missing latency measurements and unavailable native Ultra, and do not push without explicit user approval.
