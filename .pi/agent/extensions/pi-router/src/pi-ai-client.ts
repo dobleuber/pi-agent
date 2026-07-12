@@ -1,4 +1,4 @@
-import { complete, type Api, type AssistantMessage, type Context, type Model, type UserMessage } from "@earendil-works/pi-ai";
+import { complete, type Api, type AssistantMessage, type Context, type Model, type UserMessage } from "@earendil-works/pi-ai/compat";
 import type { RouterModelConfig } from "./config.ts";
 
 export interface PiModelRegistryLike {

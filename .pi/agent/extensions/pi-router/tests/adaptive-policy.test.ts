@@ -19,12 +19,18 @@ describe("adaptive thinking policy", () => {
 	});
 
 	it("parses bilingual controls, precedence, invalid controls, and ignores quoted examples", () => {
-		for (const [prompt, level] of [["@thinking:off hi", "off"], ["@thinking:xhigh revisa", "xhigh"], ["Use maximum reasoning", "max"], ["usa todas tus capacidades", "max"], ["usa esfuerzo alto", "high"]] as const)
-			assert.equal(parseThinkingOverride(prompt).level, level);
+		for (const [prompt, level] of [["@thinking:off hi", "off"], ["@thinking:xhigh revisa", "xhigh"], ["Use maximum reasoning", "max"], ["usa todas tus capacidades", "max"], ["Use Sol Max for this task", "max"], ["Usa Sol Max para esta tarea", "max"], ["usa esfuerzo alto", "high"]] as const) {
+			const override = parseThinkingOverride(prompt);
+			assert.equal(override.level, level);
+			if (/sol max/i.test(prompt)) assert.equal(override.source, "natural-language");
+		}
 		const conflict = parseThinkingOverride("@thinking:high use maximum reasoning");
 		assert.equal(conflict.level, "high"); assert.equal(conflict.conflict, true);
 		assert.equal(parseThinkingOverride('Explain the example "@thinking:max"').level, undefined);
 		assert.equal(parseThinkingOverride('Discuss the phrase "use maximum reasoning"').level, undefined);
+		for (const inert of ["The UI label is Use Sol Max", "Do not use Sol Max", "No uses Sol Max", "“Use Sol Max” is a label"]) {
+			assert.equal(parseThinkingOverride(inert).level, undefined, inert);
+		}
 		assert.match(parseThinkingOverride("@thinking:turbo do it").error ?? "", /off, minimal, low, medium, high, xhigh, max/);
 		assert.equal(parseThinkingOverride("@thinking:max do it").prompt, "do it");
 	});
@@ -66,6 +72,8 @@ describe("adaptive thinking policy", () => {
 			["implement a bounded multi-file feature", advisory("high", { taskComplexity: "complex" }), "gpt-5.6-terra", "max"],
 			["deep architecture and security review", advisory("low"), "gpt-5.6-sol", "xhigh"],
 			["use all your capabilities to implement this", advisory("low"), "gpt-5.6-sol", "max"],
+			["Use Sol Max for this task", advisory("low"), "gpt-5.6-sol", "max"],
+			["Usa Sol Max para esta tarea", advisory("low"), "gpt-5.6-sol", "max"],
 		] as const;
 		for (const [prompt, adv, model, level] of cases) {
 			const d = resolveWorkProfile({ prompt, currentModel: "openai-codex/gpt-5.6-terra", advisory: adv as any });

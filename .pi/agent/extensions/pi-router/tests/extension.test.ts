@@ -117,6 +117,58 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(result.messages, messages);
 	});
 
+	it("uses session-aware compaction only while the router is enabled", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		let state: "on" | "off" = "on";
+		const calls: any[] = [];
+		const nativeResult = { summary: "summary", firstKeptEntryId: "entry-2", tokensBefore: 42 };
+		const pi = {
+			registerCommand() {},
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) {
+				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+			},
+			getThinkingLevel: () => "max",
+		};
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => ({ state }), saveState() {} },
+			compactWithSessionIdentity: async (...args: any[]) => { calls.push(args); return nativeResult; },
+		} as any);
+
+		assert.equal(handlers.get("session_before_compact")?.length, 1);
+		const event = { preparation: {}, signal: new AbortController().signal };
+		const ctx = { ui: { notify() {} } };
+		assert.deepEqual(await handlers.get("session_before_compact")![0](event, ctx), { compaction: nativeResult });
+		assert.equal(calls.length, 1);
+		assert.equal(calls[0][0], event);
+		assert.equal(calls[0][1], ctx);
+		assert.equal(calls[0][2], "max");
+
+		state = "off";
+		assert.equal(await handlers.get("session_before_compact")![0](event, ctx), undefined);
+		assert.equal(calls.length, 1);
+	});
+
+	it("reports session-aware compaction failures without falling through to native Luna compaction", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const notifications: Array<[string, string]> = [];
+		const failure = new Error("session-bound summary failed");
+		const pi = {
+			registerCommand() {},
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [handler]); },
+		};
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => ({ state: "on" }), saveState() {} },
+			compactWithSessionIdentity: async () => { throw failure; },
+		} as any);
+		const ctx = { ui: { notify(message: string, level: string) { notifications.push([message, level]); } } };
+
+		assert.deepEqual(
+			await handlers.get("session_before_compact")![0]({ preparation: {} }, ctx),
+			{ cancel: true },
+		);
+		assert.deepEqual(notifications, [["Pi router compaction failed: session-bound summary failed", "error"]]);
+	});
+
 	it("registers a router status command and session status indicator", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();

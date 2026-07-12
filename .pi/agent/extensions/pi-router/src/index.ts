@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { compactWithSessionIdentity } from "./compaction.ts";
 import { DEFAULT_ROUTER_CONFIG, routerStatusSummary, type RouterConfig, type WorkModelInfo } from "./config.ts";
 import { extendRouterDetailsAfterCompletion, type RouterDetailsEntry } from "./details.ts";
 import { translateFinalAnswerToSpanish, type FinalAnswerTranslationResult } from "./final-answer.ts";
@@ -21,6 +22,7 @@ export interface PiRouterDependencies {
 	clearInterval?: (interval: any) => void;
 	/** Reads the mutable Pi context after model changes; injectable for API-compatible testing. */
 	readCurrentModel?: (ctx: any) => WorkModelInfo;
+	compactWithSessionIdentity?: typeof compactWithSessionIdentity;
 }
 
 const PROMPT_PREPARATION_PHRASES = [
@@ -238,6 +240,24 @@ export function installPiRouter(pi: ExtensionAPI, dependencies: PiRouterDependen
 	pi.on("context", async (event, ctx) => {
 		const branch = ctx.sessionManager?.getBranch?.() ?? [];
 		return { messages: restoreEnglishAssistantContext(event.messages, branch) };
+	});
+
+	pi.on("session_before_compact", async (event, ctx) => {
+		refreshRouterSettingsFromStore();
+		if (config.state !== "on") return;
+		const compact = dependencies.compactWithSessionIdentity ?? compactWithSessionIdentity;
+		try {
+			const compaction = await compact(
+				event,
+				ctx,
+				typeof (pi as any).getThinkingLevel === "function" ? (pi as any).getThinkingLevel() : undefined,
+			);
+			return { compaction };
+		} catch (error) {
+			const message = `Pi router compaction failed: ${error instanceof Error ? error.message : String(error)}`;
+			ctx.ui.notify(message, "error");
+			return { cancel: true };
+		}
 	});
 
 	pi.on("message_end", async (event, ctx) => serialize("messageEnd", async () => {

@@ -42,6 +42,7 @@ export function parseThinkingOverride(prompt: string): ThinkingOverride {
 }
 
 function naturalOverride(prompt: string): ThinkingLevel | undefined {
+	if (/(?:^|[.!?]\s+)(?:(?:please|por favor),?\s+)?(?:use|usa) sol max\b/i.test(prompt)) return "max";
 	if (/\b(?:use maximum (?:reasoning|effort|quality)|use all (?:your )?capabilities|usa (?:el )?(?:razonamiento|esfuerzo) m[aá]ximo|usa todas tus capacidades)\b/i.test(prompt)) return "max";
 	const named = prompt.match(/\b(?:use|usa)(?: (?:thinking|reasoning|effort|razonamiento|esfuerzo))? (off|minimal|low|medium|high|xhigh|max|bajo|medio|alto|m[ií]nimo)\b/i)?.[1]?.toLowerCase();
 	return ({ bajo: "low", medio: "medium", alto: "high", "mínimo": "minimal", minimo: "minimal" } as any)[named ?? ""] ?? (THINKING_LEVELS.includes(named as any) ? named as ThinkingLevel : undefined);
