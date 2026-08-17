@@ -1,4 +1,4 @@
-import { complete, type Api, type AssistantMessage, type Context, type Model, type UserMessage } from "@earendil-works/pi-ai";
+import { complete, type Api, type AssistantMessage, type Context, type Model, type UserMessage } from "@earendil-works/pi-ai/compat";
 import type { RouterModelConfig } from "./config.ts";
 
 export interface PiModelRegistryLike {
@@ -11,10 +11,6 @@ export type CompleteLike = typeof complete;
 export interface PiAiRuntime {
 	modelRegistry?: PiModelRegistryLike;
 	complete?: CompleteLike;
-}
-
-export function shouldUsePiAi(config: RouterModelConfig): boolean {
-	return config.provider === "openai-codex";
 }
 
 export async function completeWithPiRouterModel(
@@ -34,7 +30,7 @@ export async function completeWithPiRouterModel(
 
 	const auth = await modelRegistry.getApiKeyAndHeaders(model);
 	if (!auth.ok) {
-		throw new Error(auth.error);
+		throw new Error((auth as { ok: false; error: string }).error);
 	}
 
 	return (runtime.complete ?? complete)(model, context, {

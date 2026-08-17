@@ -1,10 +1,36 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_ROUTER_CONFIG } from "../src/config.ts";
-import { createRouterMetadata, routePromptWithModel } from "../src/router-model.ts";
+import type { PiAiRuntime } from "../src/pi-ai-client.ts";
+import { createRouterMetadata, routePromptWithModel as routeWithPiAi } from "../src/router-model.ts";
 
-describe("local router model", () => {
-	it("calls llama.cpp gemma4 with chat-role few-shot messages and JSON-only controls", async () => {
+const HTTP_TEST_MODEL = { ...DEFAULT_ROUTER_CONFIG.routerModel, provider: "test-http", model: "test-router" };
+
+function runtimeFromFetchLike(fetchLike: any): PiAiRuntime {
+	return {
+		modelRegistry: {
+			find: (provider, model) => ({ provider, id: model, api: "test" }) as any,
+			getApiKeyAndHeaders: async () => ({ ok: true, apiKey: "test" }),
+		},
+		complete: (async (model: any, context: any) => {
+			const messages = [
+				...(context.systemPrompt ? [{ role: "system", content: context.systemPrompt }] : []),
+				...context.messages.map((message: any) => ({ role: message.role, content: message.content.map((part: any) => part.text ?? "").join("\n") })),
+			];
+			const response = await fetchLike("pi-ai:test", { signal: new AbortController().signal, body: JSON.stringify({ model: model.id, messages, response_format: { type: "json_object" } }) });
+			if (!response.ok) return { role: "assistant", stopReason: "error", errorMessage: `HTTP ${response.status ?? "error"}`, content: [], timestamp: Date.now() } as any;
+			const payload = await response.json();
+			return { role: "assistant", stopReason: "stop", content: [{ type: "text", text: payload?.choices?.[0]?.message?.content ?? "" }], timestamp: Date.now() } as any;
+		}) as any,
+	};
+}
+
+function routePromptWithModel(prompt: string, config: any, fetchLike?: any, context: any = {}, runtime?: PiAiRuntime) {
+	return routeWithPiAi(prompt, config, context, runtime ?? runtimeFromFetchLike(fetchLike));
+}
+
+describe("router model", () => {
+	it("uses the JSON router contract without concrete few-shot messages", async () => {
 		const calls: Array<{ url: string; body: any }> = [];
 		const fetchLike = async (url: string, init: any) => {
 			calls.push({ url, body: JSON.parse(init.body) });
@@ -28,20 +54,57 @@ describe("local router model", () => {
 			};
 		};
 
-		const result = await routePromptWithModel("mejora el router de Pi", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await routePromptWithModel("mejora el router de Pi", HTTP_TEST_MODEL, fetchLike);
 
-		assert.equal(calls[0].url, "http://127.0.0.1:11434/v1/chat/completions");
-		assert.equal(calls[0].body.model, "gemma4");
-		assert.deepEqual(calls[0].body.stop, ["<|im_end|>"]);
+		assert.equal(calls[0].url, "pi-ai:test");
+		assert.equal(calls[0].body.model, "test-router");
 		assert.deepEqual(calls[0].body.response_format, { type: "json_object" });
-		assert.equal(calls[0].body.messages.length, 4);
-		assert.deepEqual(calls[0].body.messages.map((message: any) => message.role), ["system", "user", "assistant", "user"]);
+		assert.equal(calls[0].body.messages.length, 2);
+		assert.deepEqual(calls[0].body.messages.map((message: any) => message.role), ["system", "user"]);
+		assert.doesNotMatch(JSON.stringify(calls[0].body.messages), /Arregla los tests|Fix the tests/);
 		assert.doesNotMatch(calls[0].body.messages.at(-1).content, /<TASK>/);
 		assert.deepEqual(JSON.parse(calls[0].body.messages.at(-1).content), { task: "mejora el router de Pi" });
 		assert.equal(result.englishPrompt, "Improve the Pi router.");
 		assert.equal(result.sourceLanguage, "es");
 		assert.equal(result.thinkingLevel, "medium");
 		assert.equal(result.translateFinalAnswer, true);
+	});
+
+	it("rejects leaked legacy Fix the tests output for an unrelated prompt", async () => {
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: JSON.stringify({
+				translation: "Fix the tests",
+				sourceLanguage: "es",
+				thinkingLevel: "medium",
+				translateFinalAnswer: true,
+				usedConversationContext: false,
+				resolvedReferences: [],
+				unresolvedReferences: [],
+			}) } }] }),
+		});
+
+		const result = await routePromptWithModel("Probemos de nuevo", HTTP_TEST_MODEL, fetchLike as any);
+
+		assert.equal(result.englishPrompt, "Probemos de nuevo");
+		assert.match(result.degradedReason ?? "", /leaked legacy example output/);
+	});
+
+	it("falls back when routing drops quoted evidence", async () => {
+		const fetchLike = async () => ({
+			ok: true,
+			json: async () => ({ choices: [{ message: { content: JSON.stringify({
+				translation: "Review the router.", sourceLanguage: "es", thinkingLevel: "medium",
+				translateFinalAnswer: true, usedConversationContext: false,
+				resolvedReferences: [], unresolvedReferences: [],
+			}) } }] }),
+		});
+		const original = 'Revisa el error "connection refused" en el router.';
+
+		const result = await routePromptWithModel(original, HTTP_TEST_MODEL, fetchLike);
+
+		assert.equal(result.englishPrompt, original);
+		assert.match(result.degradedReason ?? "", /lost required literal/);
 	});
 
 	it("sends conversation context only for faithful reference resolution", async () => {
@@ -70,12 +133,12 @@ describe("local router model", () => {
 
 		const result = await routePromptWithModel(
 			"agrega eso al router de Pi",
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			fetchLike,
 			{ conversationSummary: "The current topic is adding a router details toggle." },
 		);
 
-		assert.equal(body.messages.length, 4);
+		assert.equal(body.messages.length, 2);
 		assert.match(body.messages[0].content, /Use conversation context only to resolve references/);
 		assert.deepEqual(JSON.parse(body.messages.at(-1).content), {
 			task: "agrega eso al router de Pi",
@@ -99,7 +162,7 @@ describe("local router model", () => {
 			};
 		};
 
-		const result = await routePromptWithModel(`Revisa ${path} sin cambiarlo`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await routePromptWithModel(`Revisa ${path} sin cambiarlo`, HTTP_TEST_MODEL, fetchLike);
 
 		const routedInput = JSON.parse(body.messages.at(-1).content);
 		assert.doesNotMatch(routedInput.task, /mejorar-naturalidad-salida-hablada-roger/);
@@ -121,7 +184,7 @@ describe("local router model", () => {
 			};
 		};
 
-		const result = await routePromptWithModel(`Revisa ${pathReference}`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await routePromptWithModel(`Revisa ${pathReference}`, HTTP_TEST_MODEL, fetchLike);
 
 		const routedInput = JSON.parse(body.messages.at(-1).content);
 		assert.doesNotMatch(routedInput.task, /src\/router-model\.ts/);
@@ -139,7 +202,7 @@ describe("local router model", () => {
 			}),
 		});
 
-		const result = await routePromptWithModel(`Revisa ${pathReference}`, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await routePromptWithModel(`Revisa ${pathReference}`, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.englishPrompt, `Review ${pathReference}`);
 	});
@@ -166,7 +229,7 @@ describe("local router model", () => {
 
 		const result = await routePromptWithModel(
 			`Veo otro error:\n${fencedBlock}\nRevisa ambos bugs.`,
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			fetchLike,
 		);
 
@@ -194,14 +257,12 @@ describe("local router model", () => {
 
 		const result = await routePromptWithModel(
 			`Veo otro error:\n${fencedBlock}\nRevisa ambos bugs.`,
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			fetchLike,
 		);
 
-		assert.match(result.englishPrompt, /^Review both bugs\./);
-		assert.match(result.englishPrompt, /User-provided fenced content:/);
-		assert.match(result.englishPrompt, /No\. I onlly updated this repository’s project-local extension files:/);
-		assert.match(result.englishPrompt, /__PI_ROUTER_PROTEGIDO_0__/);
+		assert.equal(result.englishPrompt, `Veo otro error:\n${fencedBlock}\nRevisa ambos bugs.`);
+		assert.match(result.degradedReason ?? "", /placeholder mismatch/);
 	});
 
 	it("records unresolved references without inventing intent", async () => {
@@ -224,13 +285,13 @@ describe("local router model", () => {
 			}),
 		});
 
-		const result = await routePromptWithModel("continua con eso", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await routePromptWithModel("continua con eso", HTTP_TEST_MODEL, fetchLike);
 
 		assert.deepEqual(result.unresolvedReferences, ["eso"]);
 		const metadata = createRouterMetadata({
 			originalPrompt: "continua con eso",
 			result,
-			routerModel: DEFAULT_ROUTER_CONFIG.routerModel,
+			routerModel: HTTP_TEST_MODEL,
 		});
 		assert.deepEqual(metadata.unresolvedReferences, ["eso"]);
 	});
@@ -248,7 +309,7 @@ describe("local router model", () => {
 			};
 		};
 
-		await routePromptWithModel("corre `pytest tests/test_cli.py`", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		await routePromptWithModel("corre `pytest tests/test_cli.py`", HTTP_TEST_MODEL, fetchLike);
 
 		assert.match(routerPrompt, /Preserve commands, paths, identifiers, quoted strings, exact placeholders, and error messages/);
 		assert.match(routerPrompt, /Preserve markdown formatting, blank lines, headings, blockquotes, bullet\/numbered list markers, and line breaks/);
@@ -271,7 +332,7 @@ describe("local router model", () => {
 			}),
 		});
 
-		const result = await routePromptWithModel(originalPrompt, DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await routePromptWithModel(originalPrompt, HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.englishPrompt, originalPrompt);
 		assert.equal(result.sourceLanguage, "es");
@@ -287,7 +348,7 @@ describe("local router model", () => {
 			}),
 		});
 
-		const result = await routePromptWithModel("Dame el estado actual del router", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		const result = await routePromptWithModel("Dame el estado actual del router", HTTP_TEST_MODEL, fetchLike);
 
 		assert.equal(result.englishPrompt, "Dame el estado actual del router");
 		assert.match(result.degradedReason ?? "", /router model returned invalid JSON/);
@@ -303,14 +364,14 @@ describe("local router model", () => {
 				translateFinalAnswer: true,
 				degradedReason: "fallback",
 			},
-			routerModel: DEFAULT_ROUTER_CONFIG.routerModel,
+			routerModel: HTTP_TEST_MODEL,
 		});
 
 		assert.deepEqual(metadata, {
 			originalPrompt: "mejora el router",
 			transformedPrompt: "Improve the router.",
 			sourceLanguage: "es",
-			routerModel: "llama-cpp/gemma4",
+			routerModel: "test-http/test-router",
 			requestedThinkingLevel: "medium",
 			fallback: "fallback",
 		});
@@ -328,7 +389,7 @@ describe("local router model", () => {
 			};
 		};
 
-		await routePromptWithModel("hello", DEFAULT_ROUTER_CONFIG.routerModel, fetchLike);
+		await routePromptWithModel("hello", HTTP_TEST_MODEL, fetchLike);
 
 		assert.ok(signal instanceof AbortSignal);
 	});
@@ -336,18 +397,22 @@ describe("local router model", () => {
 	it("falls back to passthrough when the router model is unavailable or input is oversized", async () => {
 		const unavailable = await routePromptWithModel(
 			"hola",
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			HTTP_TEST_MODEL,
 			async () => { throw new Error("connection refused"); },
 		);
 		const oversized = await routePromptWithModel(
-			"x".repeat(DEFAULT_ROUTER_CONFIG.routerModel.maxInputChars + 1),
-			DEFAULT_ROUTER_CONFIG.routerModel,
+			"x".repeat(HTTP_TEST_MODEL.maxInputChars + 1),
+			HTTP_TEST_MODEL,
 			async () => { throw new Error("should not be called"); },
 		);
 
 		assert.equal(unavailable.englishPrompt, "hola");
 		assert.equal(unavailable.degradedReason, "router model unavailable: connection refused");
+		assert.equal(unavailable.translateFinalAnswer, true);
+		assert.match(unavailable.translationNormalization ?? "", /unknown source language.*conservative default true/);
 		assert.equal(oversized.degradedReason, "input exceeds router maxInputChars: 12001 > 12000");
+		assert.equal(oversized.translateFinalAnswer, true);
+		assert.match(oversized.translationNormalization ?? "", /unknown source language.*conservative default true/);
 	});
 
 	it("routes remote OpenAI Codex subscription models through Pi modelRegistry and complete", async () => {
@@ -355,7 +420,7 @@ describe("local router model", () => {
 		let completedModel: any;
 		let completedContext: any;
 		let completedOptions: any;
-		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModels.remote;
+		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModel;
 		const modelRegistry = {
 			find: (provider: string, model: string) => ({ provider, id: model, api: "openai-codex-responses", baseUrl: "https://chatgpt.com/backend-api" }) as any,
 			getApiKeyAndHeaders: async () => ({ ok: true as const, apiKey: "codex-oauth-token", headers: { "x-test": "header" } }),
@@ -392,12 +457,12 @@ describe("local router model", () => {
 		assert.equal(completedOptions.apiKey, "codex-oauth-token");
 		assert.deepEqual(completedOptions.headers, { "x-test": "header" });
 		assert.match(completedContext.systemPrompt, /Return ONLY one JSON object/);
-		assert.match(completedContext.messages[0].content[0].text, /Actual input:/);
+		assert.deepEqual(JSON.parse(completedContext.messages[0].content[0].text), { task: "mejora el router" });
 		assert.equal(result.englishPrompt, "Improve the router.");
 	});
 
 	it("does not try unavailable alternate remote models", async () => {
-		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModels.remote;
+		const remoteModel = DEFAULT_ROUTER_CONFIG.routerModel;
 		const requestedModels: string[] = [];
 		let completeCalls = 0;
 		const modelRegistry = {

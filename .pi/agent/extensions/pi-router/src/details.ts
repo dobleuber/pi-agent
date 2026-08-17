@@ -1,9 +1,11 @@
 import type { WorkModelInfo } from "./config.ts";
-import type { RouterMetadata, ThinkingLevel } from "./router-model.ts";
+import type { RouterMetadata, RouterModelResult, ThinkingLevel } from "./router-model.ts";
 
 export type RouterDetailsPhase = "pre-dispatch" | "complete";
 
 export interface RouterDetails {
+	turnId?: string;
+	assistantTimestamp?: number;
 	originalPrompt: string;
 	transformedPrompt: string;
 	sourceLanguage: string;
@@ -14,6 +16,22 @@ export interface RouterDetails {
 	spanishAnswer?: string;
 	effectiveThinkingLevel?: string;
 	fallbackEvents?: string[];
+	advisoryThinkingLevel?: ThinkingLevel;
+	thinkingReason?: string;
+	policySelectedModel?: string;
+	effectiveModel?: string;
+	modelRouting?: "managed-family" | "preserved-external";
+	executionMode?: "standard" | "parallel-agentic" | "native-ultra";
+	requestedExecutionMode?: "standard" | "parallel-agentic" | "native-ultra";
+	normalizedSignals?: string[];
+	overrideSource?: string;
+	overrideConflict?: boolean;
+	thinkingWasClamped?: boolean;
+	thinkingNormalization?: string;
+	translationDecision?: string;
+	suggestedWorkModelTier?: "luna" | "terra" | "sol";
+	parallelizable?: boolean;
+	parallelizationReason?: string;
 }
 
 export interface RouterDetailsEntry {
@@ -26,12 +44,13 @@ export interface RouterDetailsEntry {
 
 export interface CompletedRouterDetails {
 	englishAnswer: string;
+	assistantTimestamp?: number;
 	spanishAnswer: string;
 	effectiveThinkingLevel?: string;
 	fallbackEvents?: string[];
 }
 
-export function createRouterDetailsEntry(metadata: RouterMetadata, workModel?: WorkModelInfo): RouterDetailsEntry {
+export function createRouterDetailsEntry(metadata: RouterMetadata, workModel?: WorkModelInfo, advisory?: RouterModelResult): RouterDetailsEntry {
 	const formattedWorkModel = formatWorkModel(workModel);
 	return {
 		phase: "pre-dispatch",
@@ -45,7 +64,11 @@ export function createRouterDetailsEntry(metadata: RouterMetadata, workModel?: W
 			routerModel: metadata.routerModel,
 			requestedThinkingLevel: metadata.requestedThinkingLevel,
 			workModel: formattedWorkModel,
+			...(metadata.translationDecision ? { translationDecision: metadata.translationDecision } : {}),
 			...(metadata.fallback ? { fallbackEvents: [metadata.fallback] } : {}),
+			...(advisory?.suggestedWorkModelTier ? { suggestedWorkModelTier: advisory.suggestedWorkModelTier } : {}),
+			...(advisory?.parallelizable !== undefined ? { parallelizable: advisory.parallelizable } : {}),
+			...(advisory?.parallelizationReason ? { parallelizationReason: advisory.parallelizationReason } : {}),
 		},
 	};
 }
@@ -65,6 +88,7 @@ export function extendRouterDetailsAfterCompletion(
 			...entry.details,
 			englishAnswer: completion.englishAnswer,
 			spanishAnswer: completion.spanishAnswer,
+			...(completion.assistantTimestamp !== undefined ? { assistantTimestamp: completion.assistantTimestamp } : {}),
 			...(completion.effectiveThinkingLevel ? { effectiveThinkingLevel: completion.effectiveThinkingLevel } : {}),
 			...(completion.fallbackEvents ? { fallbackEvents: completion.fallbackEvents } : {}),
 		},

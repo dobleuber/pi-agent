@@ -13,8 +13,8 @@ describe("work-model policy", () => {
 		const workModel = selectedWorkModelFromPiContext(ctx);
 
 		assert.deepEqual(workModel, { provider: "openai-codex", model: "gpt-5.5" });
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.provider, "llama-cpp");
-		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.model, "gemma4");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.provider, "openai-codex");
+		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.model, "gpt-5.4-mini");
 	});
 
 	it("formats default and changed work models without changing router policy", () => {

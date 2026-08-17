@@ -17,18 +17,18 @@ The router SHALL avoid sending chunks that contain only paths, inline code, comm
 - **THEN** the router MUST translate the prose chunks
 - **AND** it MUST preserve the technical-only path list exactly
 
-### Requirement: Placeholder restoration removes malformed numeric suffixes without corrupting literal examples
-The router SHALL restore protected paths and inline-code placeholders even when the translation model emits a placeholder with a malformed numeric suffix, while preserving literal placeholder examples inside inline code.
+### Requirement: Malformed placeholder suffixes are rejected without corrupting literal examples
+The router SHALL reject translated output containing malformed numeric placeholder suffixes, preserve the original answer, and continue preserving literal placeholder examples inside inline code.
 
 #### Scenario: Inline placeholder followed by malformed suffix
 - **WHEN** the translator returns an inline-code placeholder followed by a malformed suffix such as `__PI_ROUTER_INLINE_0__0__` or `__PI_ROUTER_INLINE_0__3__`
-- **THEN** the final answer MUST contain the original inline code span exactly once
-- **AND** it MUST NOT contain leaked suffixes such as `0__` or `3__`
+- **THEN** the router MUST reject the translated output and preserve the original answer
+- **AND** it MUST report a malformed-placeholder degradation reason
 
 #### Scenario: Non-inline protected path followed by malformed suffix
 - **WHEN** the translator returns a non-inline protected path placeholder followed by a malformed suffix such as `§P0§3__`
-- **THEN** the final answer MUST contain the original protected path exactly once
-- **AND** it MUST NOT contain leaked suffixes such as `3__`
+- **THEN** the router MUST reject the translated output and preserve the original answer
+- **AND** it MUST report a malformed-placeholder degradation reason
 
 #### Scenario: Literal placeholder example inside inline code
 - **WHEN** the original final answer includes an inline-code literal example such as `§P0§3__`
@@ -74,3 +74,15 @@ The router SHALL continue to treat unchanged English prose as a translation fall
 - **WHEN** the final-answer translator returns `Done.` for input `Done.`
 - **THEN** the router MUST preserve the original answer
 - **AND** it MUST report `final answer translation unavailable: untranslated output`
+
+### Requirement: Every protected placeholder is integrity-checked
+The router SHALL compare normalized placeholder multisets before accepting normal translation or residual-English repair output.
+
+#### Scenario: Translator drops or duplicates protected content
+- **WHEN** output changes the count of an inline-code, protected-path, or fenced-block placeholder
+- **THEN** the router MUST reject that output
+- **AND** it MUST preserve the original content with a visible degradation reason
+
+#### Scenario: Translator localizes a supported placeholder spelling
+- **WHEN** output uses a supported localized placeholder spelling with the same kind, index, and count
+- **THEN** the router MAY accept the output and restore the original protected content exactly once

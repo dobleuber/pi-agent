@@ -19,6 +19,156 @@ it("selects a different prompt-preparation phrase when alternatives exist", () =
 });
 
 describe("pi-router extension entrypoint", () => {
+	it("restores recorded English assistant answers only in work-model context", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const pi = {
+			registerCommand() {},
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) {
+				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+			},
+		};
+		const visibleMessages = [
+			{ role: "user", content: [{ type: "text", text: "Review the warning." }] },
+			{ role: "assistant", content: [{ type: "text", text: "Encontré la causa de la advertencia." }] },
+		];
+		const ctx = {
+			sessionManager: {
+				getBranch: () => [{
+					type: "custom",
+					customType: "pi-router-details",
+					data: {
+						phase: "complete",
+						details: {
+							englishAnswer: "I found the cause of the warning.",
+							spanishAnswer: "Encontré la causa de la advertencia.",
+						},
+					},
+				}],
+			},
+		};
+
+		installPiRouter(pi as any, { stateStore: { loadState: () => undefined, saveState() {} } });
+		const result = await handlers.get("context")![0]({ messages: visibleMessages }, ctx);
+
+		assert.deepEqual(result.messages[1].content, [{ type: "text", text: "I found the cause of the warning." }]);
+		assert.deepEqual(visibleMessages[1].content, [{ type: "text", text: "Encontré la causa de la advertencia." }]);
+	});
+
+	it("does not restore ambiguous duplicate Spanish answers", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const pi = {
+			registerCommand() {},
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) {
+				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+			},
+		};
+		const messages = [
+			{ role: "assistant", content: [{ type: "text", text: "Listo." }] },
+			{ role: "assistant", content: [{ type: "text", text: "Listo." }] },
+		];
+		const detail = (englishAnswer: string) => ({
+			type: "custom", customType: "pi-router-details",
+			data: { phase: "complete", details: { englishAnswer, spanishAnswer: "Listo." } },
+		});
+		const ctx = { sessionManager: { getBranch: () => [detail("Done."), detail("Ready.")] } };
+
+		installPiRouter(pi as any, { stateStore: { loadState: () => undefined, saveState() {} } });
+		const result = await handlers.get("context")![0]({ messages }, ctx);
+
+		assert.deepEqual(result.messages, messages);
+	});
+
+	it("restores duplicate Spanish answers by assistant timestamp", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const pi = { registerCommand() {}, on(event: string, handler: any) { handlers.set(event, [handler]); } };
+		const messages = [
+			{ role: "assistant", timestamp: 101, content: [{ type: "text", text: "Listo." }] },
+			{ role: "assistant", timestamp: 202, content: [{ type: "text", text: "Listo." }] },
+		];
+		const detail = (assistantTimestamp: number, englishAnswer: string) => ({
+			type: "custom", customType: "pi-router-details",
+			data: { phase: "complete", details: { assistantTimestamp, englishAnswer, spanishAnswer: "Listo." } },
+		});
+		const ctx = { sessionManager: { getBranch: () => [detail(101, "Done."), detail(202, "Ready.")] } };
+
+		installPiRouter(pi as any, { stateStore: { loadState: () => undefined, saveState() {} } });
+		const result = await handlers.get("context")![0]({ messages }, ctx);
+
+		assert.equal(result.messages[0].content[0].text, "Done.");
+		assert.equal(result.messages[1].content[0].text, "Ready.");
+	});
+
+	it("does not restore colliding assistant timestamps", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const pi = { registerCommand() {}, on(event: string, handler: any) { handlers.set(event, [handler]); } };
+		const messages = [
+			{ role: "assistant", timestamp: 101, content: [{ type: "text", text: "Listo." }] },
+			{ role: "assistant", timestamp: 101, content: [{ type: "text", text: "Listo." }] },
+		];
+		const detail = (englishAnswer: string) => ({
+			type: "custom", customType: "pi-router-details",
+			data: { phase: "complete", details: { assistantTimestamp: 101, englishAnswer, spanishAnswer: "Listo." } },
+		});
+		const ctx = { sessionManager: { getBranch: () => [detail("Done."), detail("Ready.")] } };
+
+		installPiRouter(pi as any, { stateStore: { loadState: () => undefined, saveState() {} } });
+		const result = await handlers.get("context")![0]({ messages }, ctx);
+
+		assert.deepEqual(result.messages, messages);
+	});
+
+	it("uses session-aware compaction only while the router is enabled", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		let state: "on" | "off" = "on";
+		const calls: any[] = [];
+		const nativeResult = { summary: "summary", firstKeptEntryId: "entry-2", tokensBefore: 42 };
+		const pi = {
+			registerCommand() {},
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) {
+				handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+			},
+			getThinkingLevel: () => "max",
+		};
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => ({ state }), saveState() {} },
+			compactWithSessionIdentity: async (...args: any[]) => { calls.push(args); return nativeResult; },
+		} as any);
+
+		assert.equal(handlers.get("session_before_compact")?.length, 1);
+		const event = { preparation: {}, signal: new AbortController().signal };
+		const ctx = { ui: { notify() {} } };
+		assert.deepEqual(await handlers.get("session_before_compact")![0](event, ctx), { compaction: nativeResult });
+		assert.equal(calls.length, 1);
+		assert.equal(calls[0][0], event);
+		assert.equal(calls[0][1], ctx);
+		assert.equal(calls[0][2], "max");
+
+		state = "off";
+		assert.equal(await handlers.get("session_before_compact")![0](event, ctx), undefined);
+		assert.equal(calls.length, 1);
+	});
+
+	it("reports session-aware compaction failures without falling through to native Luna compaction", async () => {
+		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
+		const notifications: Array<[string, string]> = [];
+		const failure = new Error("session-bound summary failed");
+		const pi = {
+			registerCommand() {},
+			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [handler]); },
+		};
+		installPiRouter(pi as any, {
+			stateStore: { loadState: () => ({ state: "on" }), saveState() {} },
+			compactWithSessionIdentity: async () => { throw failure; },
+		} as any);
+		const ctx = { ui: { notify(message: string, level: string) { notifications.push([message, level]); } } };
+
+		assert.deepEqual(
+			await handlers.get("session_before_compact")![0]({ preparation: {} }, ctx),
+			{ cancel: true },
+		);
+		assert.deepEqual(notifications, [["Pi router compaction failed: session-bound summary failed", "error"]]);
+	});
+
 	it("registers a router status command and session status indicator", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
@@ -57,7 +207,7 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(inputResult, { action: "continue" });
 		assert.deepEqual(statuses, [["pi-router", "<muted>◇ Router off</muted>"]]);
 		assert.deepEqual(notifications, [
-			"router:off local:on routerModel:llama-cpp/gemma4 workModel:unknown",
+			"router:off routerModel:openai-codex/gpt-5.4-mini workModel:unknown",
 		]);
 	});
 
@@ -192,17 +342,30 @@ describe("pi-router extension entrypoint", () => {
 		assert.equal(appended.at(-1)![1].phase, "complete");
 		assert.equal(appended.at(-1)![1].details.englishAnswer, "Done.");
 		assert.equal(appended.at(-1)![1].details.spanishAnswer, "Listo.");
+		assert.match(appended[0][1].details.turnId, /^router-turn-\d+$/);
+		assert.equal(appended.at(-1)![1].details.turnId, appended[0][1].details.turnId);
+
+		await handlers.get("input")![0]({ text: "mejora otra cosa", source: "interactive" }, ctx);
+		await handlers.get("message_end")![0]({ message: { role: "assistant", phase: "final_answer", content: [{ type: "text", text: "" }] } }, ctx);
+		assert.equal(appended.at(-1)![1].phase, "complete");
+		assert.match(appended.at(-1)![1].details.fallbackEvents[0], /empty answer/);
+
+		await handlers.get("input")![0]({ text: "mejora una tercera cosa", source: "interactive" }, ctx);
+		await handlers.get("message_end")![0]({ message: { role: "assistant", phase: "final_answer", content: "" } }, ctx);
+		assert.equal(appended.at(-1)![1].phase, "complete");
+		assert.match(appended.at(-1)![1].details.fallbackEvents[0], /empty answer/);
 	});
 
 	it("does not translate final assistant messages when router says the answer should stay English", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
 		let translateCalls = 0;
+		const appended: Array<[string, any]> = [];
 		const pi = {
 			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
 			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
 			setThinkingLevel() {},
-			appendEntry() {},
+			appendEntry(type: string, data: any) { appended.push([type, data]); },
 		};
 		const ctx = { ui: { notify() {}, setStatus() {} } };
 
@@ -225,12 +388,16 @@ describe("pi-router extension entrypoint", () => {
 
 		assert.equal(translateCalls, 0);
 		assert.equal(result, undefined);
+		assert.equal(appended.at(-1)![1].phase, "complete");
+		assert.equal(appended.at(-1)![1].details.englishAnswer, "Done.");
+		assert.equal(appended.at(-1)![1].details.spanishAnswer, "Done.");
 	});
 
 	it("clears routed turn state after one assistant message", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
 		let translateCalls = 0;
+		let persistedState: any;
 		const pi = {
 			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
 			on(event: string, handler: (event: any, ctx: any) => Promise<any>) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
@@ -240,6 +407,10 @@ describe("pi-router extension entrypoint", () => {
 		const ctx = { ui: { notify() {}, setStatus() {} } };
 
 		installPiRouter(pi as any, {
+			stateStore: {
+				loadState: () => persistedState,
+				saveState: (state) => { persistedState = state; },
+			},
 			routePrompt: async () => ({
 				englishPrompt: "Improve the router.",
 				sourceLanguage: "es",
@@ -463,6 +634,7 @@ describe("pi-router extension entrypoint", () => {
 		const result = await handlers.get("message_end")![0]({
 			message: {
 				role: "assistant",
+				phase: "final_answer",
 				content: [
 					{ type: "text", text: "First part." },
 					{ type: "image", url: "file://screenshot.png" },
@@ -472,7 +644,8 @@ describe("pi-router extension entrypoint", () => {
 		}, ctx);
 
 		assert.equal(translateCalls, 0);
-		assert.equal(result, undefined);
+		assert.match(result.message.content[0].text, /unsupported content/);
+		assert.deepEqual(result.message.content[1], { type: "image", url: "file://screenshot.png" });
 		assert.equal(appended.at(-1)![0], "pi-router-details");
 		assert.equal(appended.at(-1)![1].phase, "complete");
 		assert.deepEqual(appended.at(-1)![1].details.fallbackEvents, ["final answer translation skipped: unsupported message content"]);
@@ -509,12 +682,13 @@ describe("pi-router extension entrypoint", () => {
 		const result = await handlers.get("message_end")![0]({
 			message: {
 				role: "assistant",
+				phase: "final_answer",
 				content: [{ type: "text", text: 42 }],
 			},
 		}, ctx);
 
 		assert.equal(translateCalls, 0);
-		assert.equal(result, undefined);
+		assert.match(result.message.content[0].text, /unsupported content/);
 		assert.equal(appended.at(-1)![1].phase, "complete");
 		assert.deepEqual(appended.at(-1)![1].details.fallbackEvents, ["final answer translation skipped: unsupported message content"]);
 	});
@@ -683,14 +857,14 @@ describe("pi-router extension entrypoint", () => {
 
 		assert.deepEqual(statuses[0], ["pi-router", "◆ Router on"]);
 		assert.deepEqual(savedStates, [
-			{ state: "off", localMode: "on" },
-			{ state: "on", localMode: "on" },
+			{ state: "off" },
+			{ state: "on" },
 		]);
 		assert.deepEqual(notifications, ["Pi router disabled", "Pi router enabled"]);
 	});
 
 	it("reloads shared router state before commands and routing decisions", async () => {
-		let sharedState: any = { state: "on", localMode: "on" };
+		let sharedState: any = { state: "on" };
 		const createPi = () => {
 			const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 			const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
@@ -724,119 +898,28 @@ describe("pi-router extension entrypoint", () => {
 		const inputResult = await sessionB.handlers.get("input")![0]({ text: "mejora el router", source: "interactive" }, ctx);
 
 		assert.deepEqual(inputResult, { action: "continue" });
-		assert.deepEqual(notificationsB, ["router:off local:on routerModel:llama-cpp/gemma4 workModel:unknown"]);
+		assert.deepEqual(notificationsB, ["router:off routerModel:openai-codex/gpt-5.4-mini workModel:unknown"]);
 	});
 
-	it("switches local mode off, persists it, selects remote routing, and stops local llama.cpp", async () => {
+	it("rejects removed local-mode commands without changing persisted state", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
-		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
-		const savedStates: any[] = [];
-		const stoppedModels: string[] = [];
 		const notifications: string[] = [];
-		const pi = {
-			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
-			on(event: string, handler: (event: any, ctx: any) => Promise<void> | void) { handlers.set(event, [...(handlers.get(event) ?? []), handler]); },
-		};
-		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
-
-		let persistedState: any;
-		installPiRouter(pi as any, {
-			stateStore: { loadState: () => persistedState, saveState: (state) => { persistedState = state; savedStates.push(state); } },
-			localLifecycle: {
-				ensureRunning: async () => ({ status: "already-running" }),
-				stop: async (model) => { stoppedModels.push(`${model.provider}/${model.model}`); return { status: "stopped" }; },
-			},
-		});
-
-		await commands.get("router")!.handler("local off", ctx);
-		await commands.get("router")!.handler("", ctx);
-
-		assert.deepEqual(savedStates, [{ state: "off", localMode: "off" }]);
-		assert.deepEqual(stoppedModels, ["llama-cpp/gemma4"]);
-		assert.deepEqual(notifications, [
-			"Pi router local mode disabled; using remote openai-codex/gpt-5.4-mini router model",
-			"router:off local:off routerModel:openai-codex/gpt-5.4-mini workModel:unknown",
-		]);
-	});
-
-	it("switches local mode on, persists it, selects local routing, and starts llama.cpp when down", async () => {
-		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const savedStates: any[] = [];
-		const ensuredModels: string[] = [];
-		const notifications: string[] = [];
-		const pi = {
-			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
-			on() {},
-		};
+		const pi = { registerCommand(name: string, command: any) { commands.set(name, command); }, on() {} };
 		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
-
-		let persistedState: any = { localMode: "off" };
-		installPiRouter(pi as any, {
-			stateStore: { loadState: () => persistedState, saveState: (state) => { persistedState = state; savedStates.push(state); } },
-			localLifecycle: {
-				ensureRunning: async (model) => { ensuredModels.push(`${model.provider}/${model.model}`); return { status: "started" }; },
-				stop: async () => ({ status: "stopped" }),
-			},
-		});
+		installPiRouter(pi as any, { stateStore: { loadState: () => ({ state: "off" }), saveState: (state) => savedStates.push(state) } });
 
 		await commands.get("router")!.handler("local on", ctx);
-		await commands.get("router")!.handler("", ctx);
-
-		assert.deepEqual(savedStates, [{ state: "off", localMode: "on" }]);
-		assert.deepEqual(ensuredModels, ["llama-cpp/gemma4"]);
-		assert.deepEqual(notifications, [
-			"Pi router local mode enabled; started local llama.cpp router model",
-			"router:off local:on routerModel:llama-cpp/gemma4 workModel:unknown",
-		]);
-	});
-
-	it("shows local command usage without changing state for missing or unknown actions", async () => {
-		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
-		const savedStates: any[] = [];
-		const notifications: string[] = [];
-		const pi = {
-			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
-			on() {},
-		};
-		const ctx = { ui: { notify(message: string) { notifications.push(message); }, setStatus() {} } };
-
-		installPiRouter(pi as any, {
-			stateStore: { loadState: () => undefined, saveState: (state) => savedStates.push(state) },
-		});
-
-		await commands.get("router")!.handler("local", ctx);
-		await commands.get("router")!.handler("local maybe", ctx);
+		await commands.get("router")!.handler("local off", ctx);
 
 		assert.deepEqual(savedStates, []);
 		assert.deepEqual(notifications, [
-			"router local:on usage:/router local on|off",
-			"router local:on usage:/router local on|off",
+			"Local router mode has been removed; Pi Router always uses the remote GPT mini model.",
+			"Local router mode has been removed; Pi Router always uses the remote GPT mini model.",
 		]);
 	});
 
-	it("keeps local mode unchanged when toggling router on and off", async () => {
-		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
-		const savedStates: any[] = [];
-		const pi = {
-			registerCommand(name: string, command: { handler: (args: string, ctx: any) => Promise<void> }) { commands.set(name, command); },
-			on() {},
-		};
-		const ctx = { ui: { notify() {}, setStatus() {} } };
-
-		installPiRouter(pi as any, {
-			stateStore: { loadState: () => ({ localMode: "off" }), saveState: (state) => savedStates.push(state) },
-		});
-
-		await commands.get("router")!.handler("on", ctx);
-		await commands.get("router")!.handler("off", ctx);
-
-		assert.deepEqual(savedStates, [
-			{ state: "on", localMode: "off" },
-			{ state: "off", localMode: "off" },
-		]);
-	});
-
-	it("routes prompts with the active remote router model when local mode is off", async () => {
+	it("routes prompts with the sole remote router model", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
 		const routedModels: string[] = [];
@@ -848,7 +931,7 @@ describe("pi-router extension entrypoint", () => {
 		};
 		const ctx = { ui: { notify() {}, setStatus() {} } };
 
-		let persistedState: any = { localMode: "off" };
+		let persistedState: any;
 		installPiRouter(pi as any, {
 			stateStore: { loadState: () => persistedState, saveState(state) { persistedState = state; } },
 			routePrompt: async (_prompt, routerModel) => {
@@ -868,7 +951,7 @@ describe("pi-router extension entrypoint", () => {
 		assert.deepEqual(routedModels, ["openai-codex/gpt-5.4-mini"]);
 	});
 
-	it("translates final answers with the active remote router model when local mode is off", async () => {
+	it("translates final answers with the sole remote router model", async () => {
 		const commands = new Map<string, { handler: (args: string, ctx: any) => Promise<void> }>();
 		const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<any>>>();
 		const translatedModels: string[] = [];
@@ -880,7 +963,7 @@ describe("pi-router extension entrypoint", () => {
 		};
 		const ctx = { ui: { notify() {}, setStatus() {} } };
 
-		let persistedState: any = { localMode: "off" };
+		let persistedState: any;
 		installPiRouter(pi as any, {
 			stateStore: { loadState: () => persistedState, saveState(state) { persistedState = state; } },
 			routePrompt: async () => ({ 
