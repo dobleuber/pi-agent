@@ -9,25 +9,25 @@ import {
 
 describe("work-model policy", () => {
 	it("keeps router model independent from selected work model", () => {
-		const ctx = { model: { provider: "stratus", id: "stratus-code" } };
+		const ctx = { model: { provider: "openai-codex", id: "gpt-5.5" } };
 		const workModel = selectedWorkModelFromPiContext(ctx);
 
-		assert.deepEqual(workModel, { provider: "stratus", model: "stratus-code" });
+		assert.deepEqual(workModel, { provider: "openai-codex", model: "gpt-5.5" });
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.provider, "llama-cpp");
 		assert.equal(DEFAULT_ROUTER_CONFIG.routerModel.model, "gemma4");
 	});
 
-	it("formats default, Stratus, and changed work models without changing router policy", () => {
+	it("formats default and changed work models without changing router policy", () => {
 		assert.equal(formatWorkModel(undefined), "unknown");
 		assert.equal(formatWorkModel({ provider: "pi-default" }), "pi-default");
-		assert.equal(formatWorkModel({ provider: "stratus", model: "stratus-code" }), "stratus/stratus-code");
+		assert.equal(formatWorkModel({ provider: "openai-codex", model: "gpt-5.5" }), "openai-codex/gpt-5.5");
 		assert.equal(formatWorkModel({ provider: "anthropic", model: "claude-sonnet" }), "anthropic/claude-sonnet");
 	});
 
-	it("classifies Stratus/provider failures separately from router failures", () => {
-		assert.deepEqual(classifyWorkModelFailure(new Error("Stratus credits exhausted")), {
+	it("classifies provider failures separately from router failures", () => {
+		assert.deepEqual(classifyWorkModelFailure(new Error("Work model quota exhausted")), {
 			type: "work-model",
-			message: "Stratus credits exhausted",
+			message: "Work model quota exhausted",
 		});
 		assert.deepEqual(classifyWorkModelFailure(new Error("router model unavailable: connection refused")), {
 			type: "router",

@@ -10,10 +10,6 @@
     "openai-codex/gpt-5.4",
     "zai-coding/glm-5.1",
     "zai-coding/glm-5-turbo",
-    "stratus/stratus-x1ac-xl-z-ai/glm-5.1",
-    "stratus/stratus-x1ac-xl-z-ai/glm-5v-turbo",
-    "stratus/stratus-x1ac-xl-minimax/minimax-m2.7",
-    "stratus/stratus-x1ac-xl-minimax/minimax-m2.5:free",
     "openai-codex/gpt-5.5"
   ],
   "packages": [

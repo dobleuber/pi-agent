@@ -44,14 +44,14 @@ describe("router configuration", () => {
 	});
 
 	it("builds a compact status summary with router and work-model details", () => {
-		const workModel: WorkModelInfo = { provider: "stratus", model: "stratus-code" };
+		const workModel: WorkModelInfo = { provider: "openai-codex", model: "gpt-5.5" };
 		const summary = routerStatusSummary({
 			config: { ...DEFAULT_ROUTER_CONFIG, state: "on" },
 			workModel,
 			degradedReason: "router timeout",
 		});
 
-		assert.equal(summary, "router:on local:on routerModel:llama-cpp/gemma4 workModel:stratus/stratus-code degraded:router timeout");
+		assert.equal(summary, "router:on local:on routerModel:llama-cpp/gemma4 workModel:openai-codex/gpt-5.5 degraded:router timeout");
 	});
 
 	it("builds status summary with remote router model when local mode is off", () => {

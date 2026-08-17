@@ -15,11 +15,11 @@ describe("router details UX model", () => {
 			sourceLanguage: "es",
 			routerModel: "llama-cpp/gemma4",
 			requestedThinkingLevel: "medium",
-		}, { provider: "stratus", model: "stratus-code" });
+		}, { provider: "openai-codex", model: "gpt-5.5" });
 
 		assert.equal(entry.phase, "pre-dispatch");
 		assert.equal(entry.expanded, false);
-		assert.equal(entry.summary, "router: es→en thinking:medium workModel:stratus/stratus-code");
+		assert.equal(entry.summary, "router: es→en thinking:medium workModel:openai-codex/gpt-5.5");
 		assert.equal(entry.details.transformedPrompt, "Improve the router.");
 	});
 

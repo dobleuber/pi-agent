@@ -8,7 +8,7 @@ describe("routed prompt pipeline", () => {
 		const prepared = await prepareRoutedPrompt({
 			prompt: "mejora el router",
 			config: { ...DEFAULT_ROUTER_CONFIG, state: "on" },
-			workModel: { provider: "stratus", model: "stratus-code" },
+			workModel: { provider: "openai-codex", model: "gpt-5.5" },
 			routePrompt: async () => ({
 				englishPrompt: "Improve the router.",
 				sourceLanguage: "es",
@@ -24,7 +24,7 @@ describe("routed prompt pipeline", () => {
 		assert.equal(prepared.prompt, "Improve the router.");
 		assert.equal(prepared.details?.phase, "pre-dispatch");
 		assert.equal(prepared.details?.expanded, false);
-		assert.equal(prepared.details?.summary, "router: es→en thinking:medium workModel:stratus/stratus-code");
+		assert.equal(prepared.details?.summary, "router: es→en thinking:medium workModel:openai-codex/gpt-5.5");
 	});
 
 	it("warns and dispatches the original prompt when the router model is unavailable", async () => {
